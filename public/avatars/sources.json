@@ -1,0 +1,17 @@
+[
+  {
+    "employee": "alex",
+    "url": "https://randomuser.me/api/portraits/men/17.jpg",
+    "bytes": 3805
+  },
+  {
+    "employee": "max",
+    "url": "https://randomuser.me/api/portraits/men/34.jpg",
+    "bytes": 4305
+  },
+  {
+    "employee": "maria",
+    "url": "https://randomuser.me/api/portraits/women/46.jpg",
+    "bytes": 5782
+  }
+]
