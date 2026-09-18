@@ -1,13 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareDraft,venueRule,editShare,displayedShare,isEqualSplit,equalAmountLabel,upgradeStore,safeMapUrl,employeeGoal,upgradeDraft,createId,allocate,parseAmount,seed,freshDraft,addTip,balance,withdraw,distributePool,csvCell} from '../src/model.ts';
+import {prepareDraft,venueRule,equalAmountLabel,upgradeStore,safeMapUrl,employeeGoal,upgradeDraft,createId,allocate,parseAmount,sanitizeTipAmount,encodeTipContext,decodeTipContext,storeForDraft,nextDraftAfterPayment,seed,freshDraft,addTip,balance,withdraw,distributePool,csvCell} from '../src/model.ts';
 test('custom amounts use integer kopecks and reject malformed values',()=>{assert.equal(parseAmount('125,55'),12555);assert.equal(parseAmount('175.5'),17550);for(const s of ['-20','NaN','Infinity','10e3','10.001','hello',''])assert.equal(parseAmount(s),0)});
+test('tip input keeps digits only and caps at fifty thousand rubles',()=>{assert.equal(sanitizeTipAmount('влдаоф-100'),'100');assert.equal(sanitizeTipAmount('12 345'),'12345');assert.equal(sanitizeTipAmount('9999999'),'50000');assert.equal(sanitizeTipAmount('-'),'')});
 test('split conserves every kopeck for uneven amounts',()=>{for(const amount of [1001,10000,34999,5000000]){const a=allocate(amount,['a','b','c'],[34,33,33]);assert.equal(Object.values(a).reduce((n,x)=>n+x,0),amount);assert.ok(Object.values(a).every(Number.isSafeInteger))}});
 test('zero share receives nothing',()=>assert.deepEqual(allocate(1001,['a','b','c'],[0,0,100]),{a:0,b:0,c:1001}));
 test('invalid distributions are rejected',()=>{for(const shares of [[50,20,10],[-1,50,51],[NaN,0,100],[Infinity,0,0]])assert.throws(()=>allocate(1000,['a','b','c'],shares));assert.throws(()=>allocate(1000,['a'],[50,50]))});
 test('tips are never preselected',()=>assert.equal(freshDraft().amount,''));
 test('double confirmation creates one transaction',()=>{const s=seed();const d={...freshDraft(),amount:'350',split:false,recipient:'alex',comment:'Спасибо!',rating:5};const once=addTip(s,d),twice=addTip(once,d);assert.equal(twice.tips.length,s.tips.length+1);assert.equal(balance(twice)-balance(s),35000)});
-test('guest split is reflected in recipient totals',()=>{const s=seed(),d={...freshDraft(),amount:'350.01',split:true,shares:[70,20,10]};const n=addTip(s,d);assert.equal(balance(n)-balance(s),24501);assert.equal(n.tips[0].allocations.maria,7000);assert.equal(n.tips[0].allocations.max,3500)});
+test('a completed payment creates a clean draft and the next tip is a new transaction',()=>{const base=seed(),first={...prepareDraft(freshDraft(),base),amount:'350',comment:'Первый отзыв',rating:5},paid=addTip(base,first),next=nextDraftAfterPayment(first);assert.notEqual(next.id,first.id);assert.equal(next.amount,'');assert.equal(next.comment,'');assert.equal(next.rating,0);const second={...next,amount:'400',comment:'Второй отзыв'},paidAgain=addTip(paid,second);assert.equal(paidAgain.tips.length,base.tips.length+2);assert.equal(paidAgain.tips[0].amount,40000);assert.equal(paidAgain.tips[0].comment,'Второй отзыв');assert.equal(paidAgain.tips[1].amount,35000)});
+test('selected receipt employees share the tip equally',()=>{const s=seed(),d={...freshDraft(),amount:'350.01',servedIds:['alex','maria'],recipientIds:['alex','maria']};const n=addTip(s,d),values=Object.values(n.tips[0].allocations);assert.equal(balance(n)-balance(s),17501);assert.deepEqual(Object.keys(n.tips[0].allocations),['alex','maria']);assert.equal(values.reduce((a,b)=>a+b,0),35001);assert.ok(Math.max(...values)-Math.min(...values)<=1)});
 test('out of range and invalid input never creates a payment',()=>{for(const amount of ['9.99','50000.01','bad','0'])assert.throws(()=>addTip(seed(),{...freshDraft(),amount}))});
 test('paused employees cannot receive new tips',()=>{const s=seed();s.employees[0].active=false;assert.throws(()=>addTip(s,{...freshDraft(),amount:'200'}));assert.throws(()=>addTip(s,{...freshDraft(),amount:'200',split:true}))});
 test('unassigned tips do not reach employee until manager distribution',()=>{const base=seed();base.tips=base.tips.filter(t=>Object.keys(t.allocations).length);const s=addTip(base,{...freshDraft(),recipient:'pool',split:false,amount:'1000'});assert.equal(balance(s),balance(base));const n=distributePool(s);assert.equal(balance(n)-balance(s),70000);assert.equal(n.tips.reduce((sum,t)=>sum+t.amount,0),s.tips.reduce((sum,t)=>sum+t.amount,0));assert.deepEqual(distributePool(n),n)});
@@ -27,11 +29,11 @@ test('draft, payment and withdrawal work without randomUUID', () => {
  Object.defineProperty(crypto, 'randomUUID', {value: undefined, configurable: true});
  try {
   const s = seed();
-  const d = {...freshDraft(), amount: '100', split: true, shares:[70,20,10]};
+  const d = {...freshDraft(), amount: '100', split: true};
   const paid = addTip(s, d);
-  assert.equal(balance(paid) - balance(s), 7000);
+  assert.equal(balance(paid) - balance(s), 3334);
   assert.equal(addTip(paid, d).tips.length, paid.tips.length);
-  const result = withdraw(paid, 7000);
+  const result = withdraw(paid, 3334);
   assert.equal(balance(result), balance(s));
   assert.notEqual(result.withdrawals[0].id, d.id);
  } finally {
@@ -77,24 +79,7 @@ test('map link respects configured web URL and rejects non-web schemes',()=>{
 });
 
 
-test('opening custom shares preserves equal amounts until the first edit',()=>{
- const s=seed(),d=prepareDraft({...freshDraft(),amount:'175'},s);
- const custom={...d,splitMode:'custom'};
- assert.deepEqual(custom.shares.map(displayedShare),[33,33,33]);
- assert.deepEqual(addTip(s,custom).tips[0].allocations,addTip(s,d).tips[0].allocations);
- assert.equal(isEqualSplit(custom.shares),true);
- const edited={...custom,shares:editShare(custom.shares,0,70)};
- edited.shares=editShare(edited.shares,1,10);
- assert.deepEqual(edited.shares,[70,10,20]);
- assert.deepEqual(editShare(edited.shares,0,70.5),edited.shares);
- assert.equal(Object.values(addTip(s,edited).tips[0].allocations).reduce((a,b)=>a+b,0),17500);
- for(const count of [2,3,7])for(let i=0;i<count;i++)for(const value of [0,10,70,100]){
-  const result=editShare(Array(count).fill(100/count),i,value);
-  assert.equal(result[i],value);assert.equal(result.reduce((a,b)=>a+b,0),100);
-  assert.ok(result.every(x=>Number.isInteger(x)&&x>=0));
- }
-
-});
+test('guest choices always normalize to equal shares',()=>{const s=seed(),d=prepareDraft({...freshDraft(),servedIds:['alex','max'],recipientIds:['alex','max'],shares:[90,10],splitMode:'custom'},s);assert.deepEqual(d.recipientIds,['alex','max']);assert.deepEqual(d.shares,[50,50]);assert.equal(d.splitMode,'equal');assert.deepEqual(addTip(s,{...d,amount:'175'}).tips[0].allocations,{alex:8750,max:8750})});
 test('equal labels are approximate while exact allocations conserve money',()=>{
  assert.match(equalAmountLabel(17500,3),/^≈ /);
  assert.doesNotMatch(equalAmountLabel(30000,3),/^≈ /);
@@ -107,17 +92,18 @@ test('team can have two cooks, one multi-role employee or more than three people
  for(const count of [1,2,4,7]){
   const s=seed();s.employees=Array.from({length:count},(_,i)=>({...s.employees[0],id:'person-'+i,name:'Сотрудник '+i,role:count===1?'Официант и бармен':'Повар'}));
   const d=prepareDraft({...freshDraft(),amount:'350'},s);
-  assert.equal(d.recipient,'person-0');assert.equal(d.split,count>1);
-  const tip=addTip(s,d).tips[0];assert.equal(Object.keys(tip.allocations).length,count);
+  assert.equal(d.recipient,'person-0');assert.equal(d.split,true);assert.equal(d.servedIds?.length,Math.min(count,3));
+  const all=s.employees.map(e=>e.id),configured=prepareDraft({...d,servedIds:all,recipientIds:all},s);
+  const tip=addTip(s,configured).tips[0];assert.equal(Object.keys(tip.allocations).length,count);
   assert.equal(Object.values(tip.allocations).reduce((a,b)=>a+b,0),35000);
   assert.equal(venueRule(s).ids.length,count);
   const distributed=distributePool(s);assert.ok(distributed.tips.every(t=>Object.keys(t.allocations).length>0));
  }
 });
-test('reordering employees preserves custom shares by employee ID',()=>{
- const s=seed(),d={...prepareDraft(freshDraft(),s),shares:[60,30,10],splitMode:'custom'};
+test('reordering venue staff preserves the employees attached to the receipt',()=>{
+ const s=seed(),d=prepareDraft(freshDraft(),s);
  s.employees.reverse();const next=prepareDraft(d,s);
- assert.deepEqual(next.recipientIds,['max','maria','alex']);assert.deepEqual(next.shares,[10,30,60]);
+ assert.deepEqual(next.recipientIds,['alex','maria','max']);assert.deepEqual(next.shares,[100/3,100/3,100/3]);
  assert.deepEqual(venueRule(s).shares,[10,20,70]);
 });
 test('paused recipients disappear and stale payments are rejected',()=>{
@@ -126,8 +112,9 @@ test('paused recipients disappear and stale payments are rejected',()=>{
  const next=prepareDraft(d,s);assert.deepEqual(next.recipientIds,['maria','max']);assert.deepEqual(next.shares,[50,50]);
  assert.equal(next.recipient,'maria');assert.equal(addTip(s,next).tips[0].allocations.alex,undefined);
 });
-test('an empty team can only receive an unassigned venue tip',()=>{
+test('an empty receipt team cannot receive a guest tip',()=>{
  const s=seed();s.employees=[];const d=prepareDraft({...freshDraft(),amount:'100'},s);
- assert.equal(d.split,false);assert.equal(d.recipient,'pool');assert.deepEqual(addTip(s,d).tips[0].allocations,{});
+ assert.equal(d.split,true);assert.equal(d.recipient,'');assert.throws(()=>addTip(s,d));
  assert.throws(()=>distributePool(s));
 });
+test('a postponed link carries venue, amount and selected recipients to another device',()=>{const s=seed(),d=prepareDraft({...freshDraft(),amount:'499',servedIds:['alex','maria'],recipientIds:['maria'],rating:5,tags:['Забота'],comment:'Спасибо'},s);const restored=decodeTipContext(encodeTipContext(s,d));assert.ok(restored);assert.equal(restored.amount,'499');assert.deepEqual(restored.servedIds,['alex','maria']);assert.deepEqual(restored.recipientIds,['maria']);assert.equal(restored.venueSnapshot?.name,s.venue.name);assert.deepEqual(storeForDraft({...seed(),venue:{...seed().venue,name:'Другое место'}},restored).employees.map(e=>e.id),['alex','maria'])});
