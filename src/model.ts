@@ -1,8 +1,8 @@
-export type Employee = {id:string; name:string; role:string; initials:string; color:string; active:boolean; bio:string; photo?:string; goal?:string};
+export type Employee = {id:string; name:string; role:string; initials:string; color:string; active:boolean; bio:string; photo?:string; goal?:string; goalTarget?:number; cardLast4?:string; notifications?:boolean};
 export type Tip = {id:string; amount:number; allocations:Record<string,number>; rating:number; tags:string[]; comment:string; method:string; date:string; source:'guest'|'seed'; reviewed:boolean};
 export type Venue = {name:string;address:string;bill:number;mapUrl?:string};
-export type Draft = {layoutVersion:3; visitedAt:string; visitBill?:number; visitMode?:'later'; id:string; amount:string; recipient:string; split:boolean; shares:number[]; servedIds?:string[]; recipientIds?:string[]; splitMode?:'equal'|'custom'; venueSnapshot?:Venue; employeeSnapshots?:Employee[]; rating:number; tags:string[]; comment:string; method:string};
-export type Store = {version:1; venue:Venue; employees:Employee[]; tips:Tip[]; withdrawals:{id:string;amount:number;date:string}[]; settings:{shares:number[];recipientIds?:string[]}; profile:{goal:string;target:number;notifications:boolean}};
+export type Draft = {layoutVersion:3; visitedAt:string; visitBill?:number; visitMode?:'later'; snapshotLocked?:boolean; id:string; amount:string; recipient:string; split:boolean; shares:number[]; servedIds?:string[]; recipientIds?:string[]; splitMode?:'equal'|'custom'; venueSnapshot?:Venue; employeeSnapshots?:Employee[]; rating:number; tags:string[]; comment:string; method:string};
+export type Store = {version:1; venue:Venue; employees:Employee[]; tips:Tip[]; withdrawals:{id:string;amount:number;date:string;employeeId?:string}[]; settings:{shares:number[];recipientIds?:string[]}; profile:{goal:string;target:number;notifications:boolean}};
 export const KEY='alfa-tips-demo-v1';
 export const MIN_TIP=1000,MAX_TIP=5000000,MAX_TIP_RUB=MAX_TIP/100;
 export const defaultMapUrl = (address:string) => 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(address);
@@ -10,15 +10,17 @@ export function safeMapUrl(value:string|undefined, address:string):string {
  try {const url=new URL(value||'');if(url.protocol==='https:'||url.protocol==='http:')return url.href}catch{}
  return defaultMapUrl(address);
 }
-export const employeeDefaults:Record<string,{photo:string;goal:string}> = {
- alex:{photo:'/avatars/alex.jpg',goal:'Путешествие в горы'},
- maria:{photo:'/avatars/maria.jpg',goal:'Курс итальянской кухни'},
- max:{photo:'/avatars/max.jpg',goal:'Поездка к морю'}
+export const employeeDefaults:Record<string,{photo:string;goal:string;goalTarget:number;cardLast4:string}> = {
+ alex:{photo:'/avatars/alex.jpg',goal:'Путешествие в горы',goalTarget:5000000,cardLast4:'4242'},
+ maria:{photo:'/avatars/maria.jpg',goal:'Курс итальянской кухни',goalTarget:1500000,cardLast4:'2381'},
+ max:{photo:'/avatars/max.jpg',goal:'Поездка к морю',goalTarget:3000000,cardLast4:'7764'}
 };
 export function upgradeStore(s:Store):Store {
  let changed=!s.venue.mapUrl;
- const employees=s.employees.map(e=>{const defaults=employeeDefaults[e.id];if(!defaults||e.photo&&e.goal!==undefined)return e;changed=true;return {...e,photo:e.photo||defaults.photo,goal:e.goal??defaults.goal}});
- return changed?{...s,employees,venue:{...s.venue,mapUrl:s.venue.mapUrl||defaultMapUrl(s.venue.address)}}:s;
+ const employees=s.employees.map(e=>{const defaults=employeeDefaults[e.id];const fallback=defaults||{photo:'',goal:'Цель пока не указана',goalTarget:5000000,cardLast4:''};if(e.goalTarget!==undefined&&e.cardLast4!==undefined&&e.notifications!==undefined&&(!defaults||e.photo&&e.goal!==undefined))return e;changed=true;return {...e,photo:e.photo||fallback.photo||undefined,goal:e.goal??fallback.goal,goalTarget:e.goalTarget??fallback.goalTarget,cardLast4:e.cardLast4??fallback.cardLast4,notifications:e.notifications??true}});
+ const ids=employees.filter(e=>e.active).map(e=>e.id);let tips=s.tips;
+ if(ids.length&&s.tips.some(t=>!Object.keys(t.allocations).length)){changed=true;tips=s.tips.map(t=>Object.keys(t.allocations).length?t:{...t,allocations:allocate(t.amount,ids,equalShares(ids))})}
+ return changed?{...s,employees,tips,venue:{...s.venue,mapUrl:s.venue.mapUrl||defaultMapUrl(s.venue.address)}}:s;
 }
 export function employeeGoal(s:Store,e:Employee):string{return e.id==='alex'?s.profile.goal:e.goal||'Цель пока не указана'}
 
@@ -95,10 +97,10 @@ export function decodeTipContext(value:string|null):Draft|null {
   const recipients=(Array.isArray(data.draft?.recipientIds)?data.draft.recipientIds:[]).filter((id:unknown)=>typeof id==='string'&&served.includes(id));
   const amount=sanitizeTipAmount(String(data.draft?.amount||''));if(!served.length||!recipients.length||!amount)return null;
   const venue:Venue={name:data.venue.name,address:data.venue.address,bill:data.venue.bill,mapUrl:safeMapUrl(data.venue.mapUrl,data.venue.address)};
-  return {...freshDraft(),id:String(data.draft.id||createId()).slice(0,100),amount,servedIds:served,recipientIds:recipients,shares:equalShares(recipients),rating:Number.isInteger(data.draft.rating)&&data.draft.rating>=0&&data.draft.rating<=5?data.draft.rating:0,tags:Array.isArray(data.draft.tags)?data.draft.tags.filter((t:unknown)=>typeof t==='string'&&tagOptions.includes(t)).slice(0,tagOptions.length):[],comment:String(data.draft.comment||'').slice(0,500),method:['СБП','Альфа-Пэй','Карта'].includes(data.draft.method)?data.draft.method:'СБП',visitedAt:Number.isFinite(Date.parse(data.draft.visitedAt))?data.draft.visitedAt:new Date().toISOString(),visitBill:data.draft.visitBill===venue.bill?venue.bill:venue.bill,visitMode:'later',venueSnapshot:venue,employeeSnapshots:employees};
+  return {...freshDraft(),id:String(data.draft.id||createId()).slice(0,100),amount,servedIds:served,recipientIds:recipients,shares:equalShares(recipients),rating:Number.isInteger(data.draft.rating)&&data.draft.rating>=0&&data.draft.rating<=5?data.draft.rating:0,tags:Array.isArray(data.draft.tags)?data.draft.tags.filter((t:unknown)=>typeof t==='string'&&tagOptions.includes(t)).slice(0,tagOptions.length):[],comment:String(data.draft.comment||'').slice(0,500),method:['СБП','Альфа-Пэй','Карта'].includes(data.draft.method)?data.draft.method:'СБП',visitedAt:Number.isFinite(Date.parse(data.draft.visitedAt))?data.draft.visitedAt:new Date().toISOString(),visitBill:data.draft.visitBill===venue.bill?venue.bill:venue.bill,visitMode:'later',snapshotLocked:true,venueSnapshot:venue,employeeSnapshots:employees};
  }catch{return null}
 }
-export function storeForDraft(base:Store,d:Draft):Store {return d.venueSnapshot&&d.employeeSnapshots?.length?{...base,venue:d.venueSnapshot,employees:d.employeeSnapshots}:base}
+export function storeForDraft(base:Store,d:Draft):Store {return d.snapshotLocked&&d.venueSnapshot&&d.employeeSnapshots?.length?{...base,venue:d.venueSnapshot,employees:d.employeeSnapshots}:base}
 
 export function seed():Store{
  const employees:Employee[]=[{id:'alex',name:'Александр',role:'Официант',initials:'АС',color:'peach',active:true,bio:'Люблю знакомить вас с новыми вкусами. Коплю на путешествие в горы!'},{id:'maria',name:'Мария',role:'Повар',initials:'МВ',color:'sage',active:true,bio:'Готовлю с любовью к деталям.'},{id:'max',name:'Максим',role:'Бармен',initials:'МК',color:'lavender',active:true,bio:'Создаю настроение в каждом бокале.'}];
@@ -114,8 +116,8 @@ export function makeTip(draft:Draft,s:Store):Tip{
  return {id:draft.id,amount,allocations,rating:draft.rating,tags:draft.tags,comment:draft.comment.trim(),method:draft.method,date:new Date().toISOString(),source:'guest',reviewed:false};
 }
 export function addTip(s:Store,d:Draft):Store{if(s.tips.some(t=>t.id===d.id))return s;return {...s,tips:[makeTip(d,s),...s.tips]}}
-export function balance(s:Store,id='alex'):number{return s.tips.reduce((n,t)=>n+(t.allocations[id]||0),0)-(id==='alex'?s.withdrawals.reduce((n,w)=>n+w.amount,0):0)}
-export function withdraw(s:Store,amount:number):Store{if(!Number.isSafeInteger(amount)||amount<=0||amount>balance(s))throw new Error('Недостаточно средств');return {...s,withdrawals:[{id:createId(),amount,date:new Date().toISOString()},...s.withdrawals]}}
+export function balance(s:Store,id='alex'):number{return s.tips.reduce((n,t)=>n+(t.allocations[id]||0),0)-s.withdrawals.filter(w=>(w.employeeId||'alex')===id).reduce((n,w)=>n+w.amount,0)}
+export function withdraw(s:Store,amount:number,id='alex'):Store{if(!Number.isSafeInteger(amount)||amount<=0||amount>balance(s,id))throw new Error('Недостаточно средств');return {...s,withdrawals:[{id:createId(),amount,date:new Date().toISOString(),employeeId:id},...s.withdrawals]}}
 export function distributePool(s:Store):Store{const {ids,shares}=venueRule(s);if(!ids.length)throw new Error('Нет активных сотрудников для распределения.');return {...s,tips:s.tips.map(t=>Object.keys(t.allocations).length?t:{...t,allocations:allocate(t.amount,ids,shares)})}}
 export function inPeriod(t:Tip,days:number){const date=new Date(t.date);const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-days+1);return date>=start}
 export function csvCell(v:unknown):string{let s=String(v);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'}
