@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.env
+.env.*
+node_modules
+dist
+*.log
+*.tsbuildinfo
+Dockerfile*
+docker-compose*.yml
+README.md
+docs
+tests
+
+.qa

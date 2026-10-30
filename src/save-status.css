@@ -1,0 +1,110 @@
+.save-status {
+  position: fixed;
+  z-index: 150;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  padding: 18px 22px;
+  background: #242426;
+  color: white;
+  border-radius: 18px;
+  box-shadow: 0 10px 40px #0003;
+  font-size: 14px;
+}
+.save-status-error {
+  display: flex;
+  gap: 12px;
+  background: #fff4f1;
+  color: #6d251b;
+  border: 1px solid #e9b1a6;
+}
+.save-status-error > div {
+  flex: 1;
+  min-width: 0;
+}
+.save-status-error p {
+  margin: 6px 0;
+}
+.save-status-error small {
+  display: block;
+  line-height: 1.6;
+}
+.save-status-error button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 0;
+  font-weight: 600;
+}
+.save-status-error > button {
+  align-self: flex-start;
+  padding: 0 4px;
+}
+@media (max-width: 760px) {
+  .save-status {
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    max-height: 65dvh;
+    overflow: auto;
+  }
+}
+.distribution-settings {
+  margin-top: 24px;
+}
+.distribution-settings fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.distribution-settings legend {
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+.distribution-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e9e9eb;
+}
+.distribution-row > .checkbox-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.distribution-row small {
+  display: block;
+  color: #6b6b73;
+}
+.distribution-row .distribution-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  width: 92px;
+  flex-shrink: 0;
+}
+.distribution-share input {
+  width: 64px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.distribution-settings .text-button {
+  margin: 16px 0;
+}
+.modal .save-status {
+  position: static;
+  transform: none;
+  width: 100%;
+  max-height: none;
+  margin-top: 20px;
+  box-shadow: none;
+}
+.modal-feedback {
+  padding: 14px;
+  background: #fff4f1;
+  color: #6d251b;
+  border-radius: 12px;
+  margin-top: 16px;
+}

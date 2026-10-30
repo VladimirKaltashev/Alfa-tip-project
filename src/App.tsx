@@ -1,117 +1,3016 @@
-import React,{useState,useEffect,useRef} from 'react';
-import {Heart,ArrowRight,ArrowLeft,Check,ChevronRight,MapPin,ShieldCheck,Users,UserRound,ChefHat,Martini,Star,Clock,MessageSquare,Wallet,LayoutDashboard,Settings,QrCode,Download,Plus,X,Search,SlidersHorizontal,CheckCheck,Target,Bell,Copy,ExternalLink,Leaf,TrendingUp,CreditCard,Receipt,Info,AlertCircle,CalendarDays} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Heart,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  MapPin,
+  ShieldCheck,
+  Users,
+  UserRound,
+  ChefHat,
+  Martini,
+  Star,
+  Clock,
+  MessageSquare,
+  Wallet,
+  LayoutDashboard,
+  Settings,
+  QrCode,
+  Download,
+  Plus,
+  X,
+  Search,
+  SlidersHorizontal,
+  CheckCheck,
+  Target,
+  Bell,
+  Copy,
+  ExternalLink,
+  Leaf,
+  TrendingUp,
+  CreditCard,
+  Receipt,
+  Info,
+  AlertCircle,
+  CalendarDays,
+  LogIn,
+  Gift,
+} from 'lucide-react';
 import QRCode from 'qrcode';
-import {MIN_TIP,MAX_TIP,activeIds,prepareDraft,venueRule,displayedShare,editShare,equalAmountLabel,employeeGoal,safeMapUrl,equalShares,createId,money,parseAmount,sanitizeTipAmount,encodeTipContext,decodeTipContext,storeForDraft,nextDraftAfterPayment,tagOptions,freshDraft,balance,withdraw,distributePool,inPeriod,csvCell,allocate} from './model';
-import type {Store,Draft,Tip,Employee} from './model';
-import {loadStore,saveStore,loadDraft,saveDraft,confirmPayment} from './repository';
-import {PaymentExperiences} from './PaymentExperiences';
+import {
+  MIN_TIP,
+  MAX_TIP,
+  activeIds,
+  prepareDraft,
+  venueRule,
+  displayedShare,
+  editShare,
+  equalAmountLabel,
+  employeeGoal,
+  safeMapUrl,
+  equalShares,
+  createId,
+  money,
+  parseAmount,
+  sanitizeTipAmount,
+  encodeTipContext,
+  decodeTipContext,
+  storeForDraft,
+  nextDraftAfterPayment,
+  tagOptions,
+  freshDraft,
+  balance,
+  withdraw,
+  distributePool,
+  inPeriod,
+  csvCell,
+  allocate,
+  rewardForTip,
+  orangeLevel,
+  isAlfaPay,
+} from './model';
+import type { Store, Draft, Tip, Employee } from './model';
+import {
+  loadStore,
+  saveStore,
+  loadDraft,
+  saveDraft,
+  confirmPayment,
+  hydrateStore,
+} from './repository';
+import { PaymentExperiences } from './PaymentExperiences';
+import { AlfaIdPage, clearAlfaIdentity, readAlfaIdentity } from './AlfaId';
 import './styles.css';
-const go=(path:string)=>{window.location.href=path};
-const date=(s:string)=>new Date(s).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-function App(){
- const [store,setStore]=useState<Store>(()=>loadStore());const [toast,setToast]=useState('');
- const seenTips=useRef(new Set(store.tips.map(t=>t.id)));
- const [modal,setModal]=useState<React.ReactNode>(null);const path=window.location.pathname.replace(/\/$/,'')||'/';
- const resumed=path==='/'?decodeTipContext(new URLSearchParams(location.search).get('resume')):null;
- useEffect(()=>{const update=()=>{try{const next=loadStore();const incoming=next.tips.find(t=>!seenTips.current.has(t.id)&&(t.allocations.alex||0)>0);seenTips.current=new Set(next.tips.map(t=>t.id));setStore(next);if(incoming&&next.profile.notifications&&window.location.pathname.startsWith('/waiter'))setToast('Новые чаевые: +'+money(incoming.allocations.alex))}catch{setToast('Не удалось обновить данные')}};window.addEventListener('storage',update);window.addEventListener('tips-update',update);return()=>{window.removeEventListener('storage',update);window.removeEventListener('tips-update',update)}},[]);
- useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(''),4500);return()=>clearTimeout(id)},[toast]);
- function update(fn:(s:Store)=>Store){try{const next=fn(loadStore());saveStore(next);const draft=loadDraft(),known=new Set(next.employees.map(e=>e.id)),served=(draft.servedIds||[]).filter(id=>known.has(id)),available=served.length?served:activeIds(next).slice(0,3),selected=(draft.recipientIds||[]).filter(id=>available.includes(id));saveDraft({...draft,snapshotLocked:false,venueSnapshot:undefined,employeeSnapshots:undefined,servedIds:available,recipientIds:selected.length?selected:available,shares:equalShares(selected.length?selected:available)});return true}catch(e){setToast(e instanceof Error?e.message:'Не удалось сохранить изменения');return false}}
- const close=()=>setModal(null);
- const waiter=path.startsWith('/waiter'),manager=path.startsWith('/manager');
- function qr(){setModal(<QRDialog close={close} notify={setToast}/>)}
- const savedDraft=loadDraft(),guestDraft=resumed&&savedDraft.id!==resumed.id?resumed:savedDraft,guestStore=storeForDraft(store,guestDraft);
- const visit=readVisit(guestStore,guestDraft);
- const deferred=visit.deferred;
- if(path==='/experience'||path.startsWith('/experience/'))return <PaymentExperiences store={store}/>;
- return <><header className={`topbar ${waiter||manager?'cabinet-topbar':'guest-topbar'}`}><div className="topbar-inner"><a className="brand" href={manager?'/manager':waiter?'/waiter':'/'} aria-label="Альфа Чаевые — главная"><span className="brand-wordmark"><span className="brand-alfa"><span className="brand-initial">A</span><span>льфа</span></span><span className="brand-light">чаевые</span></span></a>{(waiter||manager)&&<span className="cabinet-label">{manager?'Кабинет заведения':'Кабинет сотрудника'}</span>}</div>{!waiter&&!manager&&<div className="guest-venue-strip"><a className="venue-map-link" href={safeMapUrl(guestStore.venue.mapUrl,guestStore.venue.address)} target="_blank" rel="noopener noreferrer" aria-label={`${guestStore.venue.name}, ${guestStore.venue.address} — открыть на карте`}><MapPin size={21}/><span className="venue-map-text"><b>{guestStore.venue.name}</b><span className="venue-address">{guestStore.venue.address}</span></span><ExternalLink size={15}/></a>{deferred&&<p className="deferred-context">Визит {date(visit.at)} · счёт {money(visit.bill)}</p>}</div>}</header>
- {(waiter||manager)?<div className="workspace"><aside className="sidebar"><div className="venue-mini"><span className="venue-logo"><Leaf size={23}/></span><div><b>{store.venue.name}</b><small>{manager?'Кабинет заведения':'Кабинет сотрудника'}</small></div></div><nav aria-label="Разделы кабинета">{(manager?[[LayoutDashboard,'Обзор','/manager'],[Wallet,'Все чаевые','/manager/tips'],[MessageSquare,'Отзывы','/manager/reviews'],[Users,'Команда','/manager/team'],[Settings,'Настройки','/manager/settings']]:[[LayoutDashboard,'Главная','/waiter'],[Wallet,'История','/waiter/history'],[UserRound,'Профиль','/waiter/profile']]).map(([Icon,label,url])=>{const I=Icon as typeof Heart;return <a key={String(url)} className={path===url?'selected':''} href={String(url)}><I size={20}/><span>{String(label)}</span>{label==='Отзывы'&&store.tips.filter(t=>!t.reviewed&&(t.comment||t.rating)).length>0&&<em>{store.tips.filter(t=>!t.reviewed&&(t.comment||t.rating)).length}</em>}</a>})}</nav><div className="sidebar-bottom"><div className="quiet"><ShieldCheck size={18}/> Простое спасибо. Каждый день.</div><a href="/">Открыть страницу гостя <ExternalLink size={15}/></a></div></aside><main className="dashboard">{manager?<Manager path={path} store={store} update={update} notify={setToast} setModal={setModal} close={close}/>:<Waiter path={path} store={store} update={update} notify={setToast} setModal={setModal} close={close} qr={qr}/>}</main></div>:path==='/'?<Guest store={guestStore} initialDraft={guestDraft} notify={setToast} setModal={setModal} close={close}/>:path==='/payment'?<Payment store={guestStore}/>:path.startsWith('/success/')?<Success store={guestStore} id={path.split('/')[2]} notify={setToast}/>:path==='/payment-error'?<Outcome icon={<AlertCircle/>} title="Не получилось оплатить" text="Деньги не списаны, чаевые не отправлены. Попробуйте ещё раз или выберите другой способ."><a className="primary" href="/payment">Попробовать снова <ArrowRight size={18}/></a><a className="secondary" href="/">Изменить чаевые</a></Outcome>:path==='/later'?<Later store={guestStore} notify={setToast}/>:path==='/thanks'?<Outcome icon={<Heart/>} title="Рады были видеть вас!" text="Чаевые — всегда по желанию. Надеемся, вам было хорошо в «Листве»."><a className="primary" href="/">Вернуться к странице <ArrowRight size={18}/></a></Outcome>:path==='/history'?<main className="narrow"><a className="back" href="/"><ArrowLeft size={18}/> К чаевым</a><h1>Ваши благодарности</h1><p className="muted">Чаевые, отправленные в этом браузере.</p><TipList tips={store.tips.filter(t=>t.source==='guest')} store={store}/></main>:<Outcome icon={<Search/>} title="Страница не найдена" text="Проверьте ссылку или вернитесь к чаевым."><a className="primary" href="/">На главную</a></Outcome>}
- <footer className="site-footer"><span>Альфа Чаевые · сделано для благодарности</span><span>Демонстрация · реальные деньги не списываются</span></footer>{toast&&<div className="toast" role="status"><Check size={18}/>{toast}</div>}{modal&&<Modal close={close}>{modal}</Modal>}</>
+import { Cabinet } from './Cabinet';
+import { Help } from './Help';
+import { ManagementAccess } from './ManagementAccess';
+import { AuditLog } from './AuditLog';
+import { venueId, venueUrl } from './tenant';
+import { SaveStatus } from './SaveStatus';
+import { DistributionSettings } from './DistributionSettings';
+import './save-status.css';
+const go = (path: string) => {
+  window.location.href = path;
+};
+const date = (s: string) =>
+  new Date(s).toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+function App() {
+  const [store, setStore] = useState<Store>(() => loadStore());
+  const [toast, setToast] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [ready, setReady] = useState(false),
+    [saveError, setSaveError] = useState('');
+  const seenTips = useRef(new Set(store.tips.map((t) => t.id)));
+  const [modal, setModal] = useState<React.ReactNode>(null);
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  const identity = readAlfaIdentity();
+  const resumed =
+    path === '/' ? decodeTipContext(new URLSearchParams(location.search).get('resume')) : null;
+  useEffect(() => {
+    let active = true;
+    hydrateStore()
+      .then((remote) => {
+        if (remote && active) {
+          seenTips.current = new Set(remote.tips.map((t) => t.id));
+          setStore(remote);
+        }
+      })
+      .catch((error) => {
+        if (active)
+          setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить данные');
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    const update = () => {
+      try {
+        const next = loadStore();
+        const incoming = next.tips.find(
+          (t) => !seenTips.current.has(t.id) && (t.allocations.alex || 0) > 0,
+        );
+        seenTips.current = new Set(next.tips.map((t) => t.id));
+        setStore(next);
+        if (
+          incoming &&
+          next.profile.notifications &&
+          window.location.pathname.startsWith('/waiter')
+        )
+          setToast('Новые чаевые: +' + money(incoming.allocations.alex));
+      } catch {
+        setToast('Не удалось обновить данные');
+      }
+    };
+    window.addEventListener('storage', update);
+    window.addEventListener('tips-update', update);
+    return () => {
+      window.removeEventListener('storage', update);
+      window.removeEventListener('tips-update', update);
+    };
+  }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(''), 4500);
+    return () => clearTimeout(id);
+  }, [toast]);
+  async function update(fn: (s: Store) => Store, expectedRevision = store._revision) {
+    if (saving.current) return false;
+    saving.current = true;
+    setSavingState(true);
+    setToast('');
+    setSaveError('');
+    try {
+      const current = loadStore();
+      if (expectedRevision !== current._revision)
+        throw new Error('Данные изменились в другой вкладке. Обновите страницу перед сохранением.');
+      const next = await saveStore(fn(current));
+      const draft = loadDraft(),
+        known = new Set(next.employees.map((e) => e.id)),
+        served = (draft.servedIds || []).filter((id) => known.has(id)),
+        available = served.length ? served : activeIds(next).slice(0, 3),
+        selected = (draft.recipientIds || []).filter((id) => available.includes(id));
+      saveDraft({
+        ...draft,
+        snapshotLocked: false,
+        venueSnapshot: undefined,
+        employeeSnapshots: undefined,
+        servedIds: available,
+        recipientIds: selected.length ? selected : available,
+        shares: equalShares(selected.length ? selected : available),
+      });
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Не удалось сохранить изменения');
+      return false;
+    } finally {
+      saving.current = false;
+      setSavingState(false);
+    }
+  }
+  const saving = useRef(false);
+  const [savingState, setSavingState] = useState(false);
+  const close = () => setModal(null);
+  useEffect(() => {
+    const report = (event: Event) => setToast((event as CustomEvent<string>).detail);
+    window.addEventListener('tips-sync-error', report);
+    return () => window.removeEventListener('tips-sync-error', report);
+  }, []);
+  const waiter = path.startsWith('/waiter'),
+    manager = path.startsWith('/manager');
+  function qr() {
+    setModal(<QRDialog close={close} notify={setToast} />);
+  }
+  const savedDraft = loadDraft(),
+    guestDraft = resumed && savedDraft.id !== resumed.id ? resumed : savedDraft,
+    guestStore = storeForDraft(store, guestDraft);
+  const visit = readVisit(guestStore, guestDraft);
+  const deferred = visit.deferred;
+  if (!ready)
+    return (
+      <main className="narrow" role="status">
+        <p>Загружаем данные заведения…</p>
+      </main>
+    );
+  if (loadError)
+    return (
+      <main className="narrow">
+        <h1>Не удалось загрузить заведение</h1>
+        <p role="alert">{loadError}</p>
+        <button className="primary" onClick={() => location.reload()}>
+          Попробовать снова
+        </button>
+      </main>
+    );
+  if (path === '/experience' || path.startsWith('/experience/'))
+    return <PaymentExperiences store={store} />;
+  if (path === '/alfa-id') return <AlfaIdPage />;
+  if (path === '/rewards') return <Rewards store={store} />;
+  if (path === '/help' && new URLSearchParams(location.search).get('from') !== 'manager')
+    return (
+      <Help
+        role={new URLSearchParams(location.search).get('from') === 'waiter' ? 'waiter' : 'guest'}
+      />
+    );
+  if (manager || path === '/bank' || path === '/help')
+    return (
+      <>
+        <Cabinet store={store} path={path === '/help' ? '/manager/help' : path} qr={qr}>
+          {path === '/manager/help' || path === '/help' ? (
+            <Help role="manager" embedded />
+          ) : (
+            <Manager
+              path={path}
+              store={store}
+              update={update}
+              notify={setToast}
+              setModal={setModal}
+              close={close}
+            />
+          )}
+        </Cabinet>
+        {!modal && (
+          <SaveStatus saving={savingState} error={saveError} dismiss={() => setSaveError('')} />
+        )}
+        {toast && !modal && (
+          <div className="toast" role="status">
+            <Check size={18} />
+            {toast}
+          </div>
+        )}
+        {modal && (
+          <Modal close={close}>
+            {modal}
+            <SaveStatus saving={savingState} error={saveError} dismiss={() => setSaveError('')} />
+            {toast && (
+              <p className="modal-feedback" role="status">
+                {toast}
+              </p>
+            )}
+          </Modal>
+        )}
+      </>
+    );
+  return (
+    <>
+      <header className={`topbar ${waiter || manager ? 'cabinet-topbar' : 'guest-topbar'}`}>
+        <div className="topbar-inner">
+          <a
+            className="brand"
+            href={manager ? '/manager' : waiter ? '/waiter' : '/'}
+            aria-label="Альфа Чаевые — главная"
+          >
+            <span className="brand-wordmark">
+              <span className="brand-alfa">
+                <span className="brand-initial">A</span>
+                <span>льфа</span>
+              </span>
+              <span className="brand-light">чаевые</span>
+            </span>
+          </a>
+          {(waiter || manager) && (
+            <span className="cabinet-label">
+              {manager ? 'Кабинет заведения' : 'Кабинет сотрудника'}
+            </span>
+          )}
+          {!waiter &&
+            !manager &&
+            (identity ? (
+              <span className="alfa-session">
+                <Gift size={15} />
+                <a href="/rewards">{store.oranges.balance} бонусов</a>
+                <button
+                  onClick={() => {
+                    clearAlfaIdentity();
+                    location.href = '/';
+                  }}
+                  aria-label="Выйти из Alfa ID"
+                >
+                  {identity.name} · выйти
+                </button>
+              </span>
+            ) : (
+              <a
+                className="alfa-login"
+                href={`/alfa-id?return=${encodeURIComponent(path + location.search)}`}
+              >
+                <LogIn size={16} /> Войти с Alfa ID
+              </a>
+            ))}
+        </div>
+        {!waiter && !manager && (
+          <div className="guest-venue-strip">
+            <a
+              className="venue-map-link"
+              href={safeMapUrl(guestStore.venue.mapUrl, guestStore.venue.address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${guestStore.venue.name}, ${guestStore.venue.address} — открыть на карте`}
+            >
+              <MapPin size={21} />
+              <span className="venue-map-text">
+                <b>{guestStore.venue.name}</b>
+                <span className="venue-address">{guestStore.venue.address}</span>
+              </span>
+              <ExternalLink size={15} />
+            </a>
+            {deferred && (
+              <p className="deferred-context">
+                Визит {date(visit.at)} · счёт {money(visit.bill)}
+              </p>
+            )}
+          </div>
+        )}
+      </header>
+      {waiter || manager ? (
+        <div className="workspace">
+          <aside className="sidebar">
+            <div className="venue-mini">
+              <span className="venue-logo">
+                <Leaf size={23} />
+              </span>
+              <div>
+                <b>{store.venue.name}</b>
+                <small>{manager ? 'Кабинет заведения' : 'Кабинет сотрудника'}</small>
+              </div>
+            </div>
+            <nav aria-label="Разделы кабинета">
+              {(manager
+                ? [
+                    [LayoutDashboard, 'Статистика', '/manager/statistics'],
+                    [Wallet, 'Все чаевые', '/manager/tips'],
+                    [MessageSquare, 'Отзывы', '/manager/reviews'],
+                    [Users, 'Команда', '/manager/team'],
+                    [Settings, 'Настройки', '/manager/settings'],
+                  ]
+                : [
+                    [LayoutDashboard, 'Главная', '/waiter'],
+                    [Wallet, 'История', '/waiter/history'],
+                    [UserRound, 'Профиль', '/waiter/profile'],
+                  ]
+              ).map(([Icon, label, url]) => {
+                const I = Icon as typeof Heart;
+                return (
+                  <a
+                    key={String(url)}
+                    className={path === url ? 'selected' : ''}
+                    href={String(url)}
+                  >
+                    <I size={20} />
+                    <span>{String(label)}</span>
+                    {label === 'Отзывы' &&
+                      store.tips.filter((t) => !t.reviewed && (t.comment || t.rating)).length >
+                        0 && (
+                        <em>
+                          {store.tips.filter((t) => !t.reviewed && (t.comment || t.rating)).length}
+                        </em>
+                      )}
+                  </a>
+                );
+              })}
+            </nav>
+            <div className="sidebar-bottom">
+              <div className="quiet">
+                <ShieldCheck size={18} /> Простое спасибо. Каждый день.
+              </div>
+              <a href="/">
+                Открыть страницу гостя <ExternalLink size={15} />
+              </a>
+            </div>
+          </aside>
+          <main className="dashboard">
+            {manager ? (
+              <Manager
+                path={path}
+                store={store}
+                update={update}
+                notify={setToast}
+                setModal={setModal}
+                close={close}
+              />
+            ) : (
+              <Waiter
+                path={path}
+                store={store}
+                update={update}
+                notify={setToast}
+                setModal={setModal}
+                close={close}
+                qr={qr}
+              />
+            )}
+          </main>
+        </div>
+      ) : path === '/' ? (
+        <Guest
+          store={guestStore}
+          initialDraft={guestDraft}
+          notify={setToast}
+          setModal={setModal}
+          close={close}
+        />
+      ) : path === '/payment' ? (
+        <Payment store={guestStore} />
+      ) : path.startsWith('/success/') ? (
+        <Success store={guestStore} id={path.split('/')[2]} notify={setToast} />
+      ) : path === '/payment-error' ? (
+        <Outcome
+          icon={<AlertCircle />}
+          title="Не получилось оплатить"
+          text="Деньги не списаны, чаевые не отправлены. Попробуйте ещё раз или выберите другой способ."
+        >
+          <a className="primary" href="/payment">
+            Попробовать снова <ArrowRight size={18} />
+          </a>
+          <a className="secondary" href="/">
+            Изменить чаевые
+          </a>
+        </Outcome>
+      ) : path === '/later' ? (
+        <Later store={guestStore} notify={setToast} />
+      ) : path === '/thanks' ? (
+        <Outcome
+          icon={<Heart />}
+          title="Рады были видеть вас!"
+          text="Чаевые — всегда по желанию. Надеемся, вам было хорошо в «Листве»."
+        >
+          <a className="primary" href="/">
+            Вернуться к странице <ArrowRight size={18} />
+          </a>
+        </Outcome>
+      ) : path === '/history' ? (
+        <main className="narrow">
+          <a className="back" href="/">
+            <ArrowLeft size={18} /> К чаевым
+          </a>
+          <h1>Ваши благодарности</h1>
+          <p className="muted">Чаевые, отправленные в этом браузере.</p>
+          <TipList tips={store.tips.filter((t) => t.source === 'guest')} store={store} />
+        </main>
+      ) : (
+        <Outcome
+          icon={<Search />}
+          title="Страница не найдена"
+          text="Проверьте ссылку или вернитесь к чаевым."
+        >
+          <a className="primary" href="/">
+            На главную
+          </a>
+        </Outcome>
+      )}
+      <footer className="site-footer">
+        <span>Альфа Чаевые · сделано для благодарности</span>
+        <a href={waiter ? '/help?from=waiter' : '/help'}>Помощь</a>
+        <span>Демонстрация · реальные деньги не списываются</span>
+      </footer>
+      {!modal && (
+        <SaveStatus saving={savingState} error={saveError} dismiss={() => setSaveError('')} />
+      )}
+      {toast && !modal && (
+        <div className="toast" role="status">
+          <Check size={18} />
+          {toast}
+        </div>
+      )}
+      {modal && (
+        <Modal close={close}>
+          {modal}
+          <SaveStatus saving={savingState} error={saveError} dismiss={() => setSaveError('')} />
+          {toast && (
+            <p className="modal-feedback" role="status">
+              {toast}
+            </p>
+          )}
+        </Modal>
+      )}
+    </>
+  );
 }
-function readVisit(store:Store,draft=loadDraft()){
- const params=new URLSearchParams(location.search);
- const deferred=params.has('resume')||params.get('mode')==='later'||draft.visitMode==='later';
- const rawDate=params.get('visitAt');
- const at=rawDate&&Number.isFinite(Date.parse(rawDate))?rawDate:draft.visitedAt;
- const rawBill=Number(params.get('bill'));
- const bill=params.get('mode')==='later'&&Number.isSafeInteger(rawBill)&&rawBill>0&&rawBill<=10000000?rawBill:deferred&&draft.visitBill?draft.visitBill:store.venue.bill;
- return {at,bill,deferred};
+function readVisit(store: Store, draft = loadDraft()) {
+  const params = new URLSearchParams(location.search);
+  const deferred =
+    params.has('resume') || params.get('mode') === 'later' || draft.visitMode === 'later';
+  const rawDate = params.get('visitAt');
+  const at = rawDate && Number.isFinite(Date.parse(rawDate)) ? rawDate : draft.visitedAt;
+  const rawBill = Number(params.get('bill'));
+  const bill =
+    params.get('mode') === 'later' &&
+    Number.isSafeInteger(rawBill) &&
+    rawBill > 0 &&
+    rawBill <= 10000000
+      ? rawBill
+      : deferred && draft.visitBill
+        ? draft.visitBill
+        : store.venue.bill;
+  return { at, bill, deferred };
 }
-function laterLink(store:Store,draft=loadDraft()){return location.origin+'/?'+new URLSearchParams({resume:encodeTipContext(store,draft)}).toString()}
-async function copy(value:string,notify:(s:string)=>void){
- try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);notify('Ссылка скопирована');return}}catch{/* HTTP/browser fallback below */}
- const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.append(input);input.select();input.setSelectionRange(0,value.length);
- try{notify(document.execCommand('copy')?'Ссылка скопирована':'Скопируйте ссылку из адресной строки браузера')}catch{notify('Скопируйте ссылку из адресной строки браузера')}finally{input.remove()}
+function laterLink(store: Store, draft = loadDraft()) {
+  return (
+    location.origin +
+    '/?' +
+    new URLSearchParams({ venue: venueId, resume: encodeTipContext(store, draft) }).toString()
+  );
+}
+async function copy(value: string, notify: (s: string) => void) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      notify('Ссылка скопирована');
+      return;
+    }
+  } catch {}
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.append(input);
+  input.select();
+  input.setSelectionRange(0, value.length);
+  try {
+    notify(
+      document.execCommand('copy')
+        ? 'Ссылка скопирована'
+        : 'Скопируйте ссылку из адресной строки браузера',
+    );
+  } catch {
+    notify('Скопируйте ссылку из адресной строки браузера');
+  } finally {
+    input.remove();
+  }
 }
 
-function Modal({close,children}:{close:()=>void;children:React.ReactNode}){const ref=useRef<HTMLDialogElement>(null);useEffect(()=>{ref.current?.showModal()},[]);return <dialog ref={ref} className="modal" onCancel={close} onClick={e=>{if(e.target===e.currentTarget)close()}} aria-label="Диалог"><button className="icon-button modal-close" aria-label="Закрыть" onClick={close}><X/></button>{children}</dialog>}
-function Avatar({employee,large=false}:{employee:Employee;large?:boolean}){const [failed,setFailed]=useState(false);useEffect(()=>setFailed(false),[employee.photo]);return <span className={`avatar ${employee.photo&&!failed?'photo':employee.color} ${large?'large':''}`}>{employee.photo&&!failed?<img src={employee.photo} alt={`Фото: ${employee.name}`} width="128" height="128" onError={()=>setFailed(true)}/>:employee.initials}</span>}
-function EmployeeGoal({store,employee}:{store:Store;employee:Employee}){return <span className="savings-goal"><span>Моя цель</span><span>{employeeGoal(store,employee)}</span></span>}
-function SectionTitle({num,title,extra}:{num?:string;title:string;extra?:React.ReactNode}){return <div className="section-title"><h2>{num&&<span className="step">{num}</span>}{title}</h2>{extra}</div>}
-function EmployeeDetails({store,employee,selected,toggle,close}:{store:Store;employee:Employee;selected:boolean;toggle:()=>void;close:()=>void}){return <div className="employee-details"><Avatar employee={employee} large/><p className="eyebrow">{employee.role}</p><h2>{employee.name}</h2><p className="muted">{employee.bio||'Будет рад вашей благодарности.'}</p><div className="employee-goal-detail"><Target size={20}/><span><small>Копит на</small><b>{employeeGoal(store,employee)}</b></span></div><button className={selected?'secondary':'primary'} onClick={()=>{toggle();close()}}>{selected?<><X size={18}/> Убрать из получателей</>:<><Check size={18}/> Выбрать сотрудника</>}</button></div>}
-function ReceiptTeamDialog({store,current,apply,close}:{store:Store;current:string[];apply:(ids:string[])=>void;close:()=>void}){const available=store.employees.filter(e=>e.active);const [ids,setIds]=useState(current);return <div className="receipt-team-dialog"><span className="developer-label"><Settings size={14}/> Режим разработчика</span><h2>Кто обслуживал этот чек?</h2><p className="muted">На настоящей странице этот список придёт с бэкенда вместе с чеком.</p><div className="receipt-team-options">{available.map(e=>{const on=ids.includes(e.id);return <button type="button" key={e.id} aria-pressed={on} className={on?'selected':''} onClick={()=>setIds(on?ids.filter(id=>id!==e.id):[...ids,e.id])}><Avatar employee={e}/><span><b>{e.name}</b><small>{e.role}</small></span><span className="selection-box">{on&&<Check size={15}/>}</span></button>})}</div>{!ids.length&&<p className="error">Выберите хотя бы одного сотрудника</p>}<button className="primary" disabled={!ids.length} onClick={()=>{apply(ids);close()}}>Применить к чеку <Check size={18}/></button></div>}
-function Guest({store,initialDraft,notify,setModal,close}:{store:Store;initialDraft:Draft;notify:(s:string)=>void;setModal:(n:React.ReactNode)=>void;close:()=>void}){
- const [draft,setD]=useState<Draft>(()=>{const visit=readVisit(store,initialDraft),prepared=prepareDraft({...initialDraft,visitedAt:visit.at,visitBill:visit.bill,visitMode:visit.deferred?'later':undefined},store);saveDraft(prepared);return prepared});
- const d=prepareDraft(draft,store),servedIds=d.servedIds||[],ids=d.recipientIds||[];
- const employees=servedIds.map(id=>store.employees.find(e=>e.id===id)).filter((e):e is Employee=>!!e),selectedSet=new Set(ids);
- const [error,setError]=useState('');const amount=parseAmount(d.amount);const visit=readVisit(store,d);
- function patch(part:Partial<Draft>){try{setD(current=>{const next={...prepareDraft(current,store),...part};saveDraft(next);return next});setError('')}catch{setError('Не удалось сохранить выбор. Разрешите хранение данных в браузере.')}}
- function toggleRecipient(id:string){const next=selectedSet.has(id)?ids.filter(x=>x!==id):[...ids,id];patch({recipientIds:next,recipient:next[0]||'',shares:equalShares(next)})}
- function valid(){if(amount<MIN_TIP||amount>MAX_TIP){setError('Введите сумму от 10 до 50 000 ₽');document.getElementById('amount')?.focus();return false}if(!ids.length){setError('Выберите хотя бы одного сотрудника');document.querySelector('.recipients-section')?.scrollIntoView({behavior:'smooth'});return false}return true}
- function submit(e:React.FormEvent){e.preventDefault();if(!valid())return;try{saveDraft(d);go('/payment')}catch{setError('Не удалось сохранить платёж')}}
- function postpone(){if(!valid())return;const portable={...d,visitMode:'later' as const,venueSnapshot:store.venue,employeeSnapshots:employees};try{saveDraft(portable);go('/later')}catch{notify('Не удалось сохранить ссылку')}}
- function changeServed(next:string[]){patch({servedIds:next,recipientIds:next,recipient:next[0]||'',shares:equalShares(next)})}
- return <main className="guest-layout guest-focused"><div className="guest-heading"><h1>Оставить чаевые</h1><span>Счёт {money(visit.bill)}</span></div><form className="tip-form" onSubmit={submit} noValidate>
- <section className="form-section amount-section"><SectionTitle title="Сколько оставим?"/><div className="amount-input"><input id="amount" style={{width:`${Math.max(1,d.amount.length)}ch`}} aria-label="Своя сумма чаевых" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="0" maxLength={5} value={d.amount} onChange={e=>patch({amount:sanitizeTipAmount(e.target.value)})}/><span>₽</span></div><div className="amount-presets">{[5,10,15].map(p=>{const preset=Math.min(MAX_TIP,Math.round(visit.bill*p/100));return <button type="button" key={p} className={amount===preset?'active':''} onClick={()=>patch({amount:String(preset/100)})}><b>{p}%</b><span>{money(preset)}</span></button>})}<button type="button" onClick={()=>document.getElementById('amount')?.focus()}><SlidersHorizontal size={18}/><span>Своя сумма</span></button></div></section>
- <section className="form-section recipients-section"><SectionTitle title="Кому оставим?"/><p className="recipient-instruction">Нажмите на карточки, чтобы выбрать одного или нескольких сотрудников</p><div className={`equal-recipients receipt-recipients team-size-${Math.min(employees.length,3)}`} role="list" aria-label="Сотрудники, обслуживавшие чек">{employees.map(e=>{const selected=selectedSet.has(e.id);return <article className={`equal-recipient receipt-recipient ${selected?'chosen':''}`} key={e.id} role="listitem"><button type="button" className="employee-select" aria-pressed={selected} onClick={()=>toggleRecipient(e.id)}><Avatar employee={e}/><b>{e.name}</b><small>{e.role}</small><strong>{selected?(amount>0?equalAmountLabel(amount,ids.length):ids.length>1?`1/${ids.length} суммы`:'Вся сумма'):'Не выбран'}</strong><span className="recipient-check">{selected&&<Check size={13}/>}</span></button><button type="button" className="employee-more" onClick={()=>setModal(<EmployeeDetails store={store} employee={e} selected={selected} toggle={()=>toggleRecipient(e.id)} close={close}/>) }><Info size={15}/> Подробнее</button></article>})}</div>{!employees.length&&<p className="error">К этому чеку пока не привязан ни один сотрудник.</p>}{error&&<p className="error recipient-error" role="alert">{error}</p>}</section>
- <section className="form-section"><SectionTitle title="Как вам у нас?"/><div className="rating" role="group" aria-label="Оценка визита">{[1,2,3,4,5].map(n=><button key={n} type="button" aria-label={`Оценка ${n} из 5`} aria-pressed={d.rating===n} onClick={()=>patch({rating:d.rating===n?0:n})}><Star size={32} fill={n<=d.rating?'currentColor':'none'} className={n<=d.rating?'filled':''}/></button>)}<span>{['Впечатления?','Очень плохо','Не понравилось','Неплохо','Хорошо','Всё прекрасно!'][d.rating]}</span></div><div className="quick-tags"><span>Быстро отметить, что понравилось</span><div className="tags" role="group" aria-label="Что понравилось">{tagOptions.map(tag=><button type="button" aria-pressed={d.tags.includes(tag)} className={d.tags.includes(tag)?'active':''} key={tag} onClick={()=>patch({tags:d.tags.includes(tag)?d.tags.filter(t=>t!==tag):[...d.tags,tag]})}>{d.tags.includes(tag)?<Check size={15}/>:<Plus size={15}/>} {tag}</button>)}</div></div><label className="review-label" htmlFor="review">Что вам понравилось?</label><textarea id="review" placeholder="Пара слов, которые сделают чей-то день лучше" maxLength={500} rows={3} value={d.comment} onChange={e=>patch({comment:e.target.value})}/><div className="textarea-bottom"><small>{d.comment.length}/500</small></div></section>
- <section className="form-section payment-section"><SectionTitle title="Способ оплаты"/><div className="payment-options">{['СБП','Альфа-Пэй','Карта'].map((m,i)=><button type="button" aria-pressed={d.method===m} className={d.method===m?'active':''} key={m} onClick={()=>patch({method:m})}>{i===0?<span className="sbp-mark">➤</span>:i===1?<span className="tiny-alfa">А</span>:<CreditCard size={20}/>}<span>{m}</span></button>)}</div><div className="fee-line"><span>Комиссия в демо</span><b>0 ₽</b></div><div className="mobile-pay"><div className="pay-summary"><span>Итого к оплате</span><b>{money(amount)}</b></div>{error&&<p className="error" role="alert">{error}</p>}<button className="primary" type="submit">Сказать спасибо {amount>0?money(amount):''}<Heart size={19}/></button></div><div className="later-actions"><button type="button" className="later-save" onClick={postpone}><Clock size={19}/><span><b>Оставить чаевые позже</b><small>Сохранить заполненную страницу по ссылке</small></span><ChevronRight size={18}/></button><a className="skip-tip" href="/thanks">Без чаевых</a></div><button type="button" className="dev-receipt-button" onClick={()=>setModal(<ReceiptTeamDialog store={store} current={servedIds} apply={changeServed} close={close}/>) }><Settings size={14}/> Тест: кто обслуживал этот чек</button></section></form></main>
+function Modal({ close, children }: { close: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="modal"
+      onCancel={close}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      aria-label="Диалог"
+    >
+      <button className="icon-button modal-close" aria-label="Закрыть" onClick={close}>
+        <X />
+      </button>
+      {children}
+    </dialog>
+  );
 }
-function Payment({store}:{store:Store}){const [d]=useState(()=>prepareDraft(loadDraft(),store));const [busy,setBusy]=useState(false),[error,setError]=useState('');const lock=useRef(false);const amount=parseAmount(d.amount),ids=d.recipientIds||[];let distribution:Record<string,number>={};try{distribution=allocate(amount,ids,equalShares(ids))}catch{}
- async function pay(){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{const tip=await confirmPayment(d);saveDraft(nextDraftAfterPayment(d));go('/success/'+tip.id)}catch(e){setError(e instanceof Error?e.message:'Не удалось отправить чаевые');lock.current=false;setBusy(false)}}
- return <main className="narrow"><a className="back" href="/"><ArrowLeft size={18}/> Изменить чаевые</a><div className="checkout card"><div className="round-icon"><ShieldCheck/></div><span className="eyebrow">ПРОВЕРЬТЕ ПЕРЕД ОПЛАТОЙ</span><h1>Ваше спасибо</h1><div className="checkout-amount">{money(amount)}</div><p className="muted">{store.venue.name} · {store.venue.address}</p><div className="receipt-lines">{Object.entries(distribution).map(([id,n])=><div key={id}><span>{store.employees.find(e=>e.id===id)?.name} · {store.employees.find(e=>e.id===id)?.role}</span><b>{money(n)}</b></div>)}{!Object.keys(distribution).length&&<div><span>Заведению · ожидает распределения</span><b>{money(amount)}</b></div>}<div><span>Способ оплаты</span><b>{d.method}</b></div><div><span>Комиссия в демо</span><b>0 ₽</b></div><div className="total"><span>Всего</span><b>{money(amount)}</b></div></div><div className="info-box"><Info size={20}/><span>{d.method==='Карта'?'Демонстрационная карта •• 4242. Вводить реквизиты не нужно.':`В реальном сервисе здесь откроется ${d.method==='СБП'?'приложение выбранного банка':'Альфа-Банк'}. Сейчас можно проверить результат оплаты.`}</span></div>{error&&<p role="alert" className="error">{error}</p>}<button className="primary" disabled={busy} onClick={pay}>{busy?<><span className="spinner"/> Отправляем спасибо…</>:<>Подтвердить демооплату <ArrowRight size={19}/></>}</button><button disabled={busy} className="text-button failure-button" onClick={()=>go('/payment-error')}>Проверить сценарий ошибки</button><p className="quiet centered">Реальные деньги не списываются</p></div></main>
+function Avatar({ employee, large = false }: { employee: Employee; large?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [employee.photo]);
+  return (
+    <span
+      className={`avatar ${employee.photo && !failed ? 'photo' : employee.color} ${large ? 'large' : ''}`}
+    >
+      {employee.photo && !failed ? (
+        <img
+          src={employee.photo}
+          alt={`Фото: ${employee.name}`}
+          width="128"
+          height="128"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        employee.initials
+      )}
+    </span>
+  );
 }
-function Outcome({icon,title,text,children}:{icon:React.ReactNode;title:string;text:string;children:React.ReactNode}){return <main className="narrow"><div className="outcome card"><div className="round-icon">{icon}</div><h1>{title}</h1><p className="muted">{text}</p><div className="outcome-actions">{children}</div></div></main>}
-function Later({store,notify}:{store:Store;notify:(s:string)=>void}){const d=prepareDraft(loadDraft(),store),employees=(d.servedIds||[]).map(id=>store.employees.find(e=>e.id===id)).filter((e):e is Employee=>!!e);const portable={...d,visitMode:'later' as const,venueSnapshot:store.venue,employeeSnapshots:employees};const link=laterLink(store,portable),names=(d.recipientIds||[]).map(id=>store.employees.find(e=>e.id===id)?.name).filter(Boolean).join(', ');return <main className="narrow"><div className="outcome card later-card"><div className="round-icon"><Clock/></div><h1>Спасибо подождёт</h1><p className="muted">Ссылка сохранит место, сумму и выбранных сотрудников. Её можно открыть на другом устройстве — останется только подтвердить оплату.</p><div className="later-summary"><div><span>Заведение</span><b>{store.venue.name}</b></div><div><span>Сумма</span><b>{money(parseAmount(d.amount))}</b></div><div><span>Получатели</span><b>{names||'Не выбраны'}</b></div></div><div className="outcome-actions"><button className="primary" onClick={()=>copy(link,notify)}>Скопировать ссылку <Copy size={19}/></button><a className="secondary" href={link}>Открыть сохранённую страницу <ArrowRight size={18}/></a><a className="text-button" href="/">Вернуться к чаевым</a></div></div></main>}
-function Success({store,id,notify}:{store:Store;id:string;notify:(s:string)=>void}){const t=store.tips.find(t=>t.id===id);if(!t)return <Outcome icon={<Receipt/>} title="Операция не найдена" text="Этот перевод не сохранён в текущем браузере."><a className="primary" href="/history">Открыть историю</a></Outcome>;return <main className="narrow"><div className="outcome card success"><div className="success-art"><span className="spark s1">+</span><span className="spark s2">✦</span><div className="success-heart"><Heart size={48} fill="currentColor"/><span><Check size={18}/></span></div><span className="spark s3">✧</span></div><span className="eyebrow green">ДЕМООПЛАТА ПРОШЛА</span><h1>Спасибо доставлено!</h1><p className="muted">Вы сделали чей-то день лучше.<br/>{Object.keys(t.allocations).length?'Команда уже видит вашу благодарность.':'Менеджер видит чаевые и распределит их команде.'}</p><div className="success-amount">{money(t.amount)}</div><div className="receipt-lines">{Object.entries(t.allocations).map(([id,n])=><div key={id}><span>{store.employees.find(e=>e.id===id)?.name}</span><b>{money(n)}</b></div>)}{!Object.keys(t.allocations).length&&<div><span>Заведению</span><b>Ожидает распределения</b></div>}<div><span>{store.venue.name}</span><span>{date(t.date)}</span></div><div><span>Статус</span><span className="green">{Object.keys(t.allocations).length?'Зачислено':'Ожидает распределения'}</span></div></div>{(t.comment||t.rating>0||t.tags.length>0)&&<div className="thank-note"><MessageSquare size={20}/><div><b>Ваша благодарность передана</b>{t.rating>0&&<small>{'★'.repeat(t.rating)} · {t.tags.join(', ')}</small>}{t.comment&&<p>«{t.comment}»</p>}</div></div>}<div className="outcome-actions"><button className="secondary" onClick={()=>{download(`Альфа Чаевые — демо-подтверждение\nОперация ${t.id}\n${date(t.date)}\n${store.venue.name}\nСумма: ${money(t.amount)}\nСпособ: ${t.method}\nКомиссия: 0 ₽\n${Object.entries(t.allocations).map(([id,n])=>`${store.employees.find(e=>e.id===id)?.name}: ${money(n)}`).join('\n')}\nРеальные деньги не списаны. Не фискальный чек.\n`,'подтверждение-чаевых.txt','text/plain;charset=utf-8');notify('Демо-подтверждение сохранено')}}><Download size={18}/> Сохранить подтверждение</button><a className="primary" href="/history">Мои благодарности <ArrowRight size={18}/></a><a className="text-button" href="/">Вернуться в заведение</a></div></div></main>}
-function download(content:string,name:string,type:string){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-function QRDialog({close,notify}:{close:()=>void;notify:(s:string)=>void}){const [src,setSrc]=useState('');useEffect(()=>{QRCode.toDataURL(location.origin+'/',{width:300,margin:2,color:{dark:'#242424',light:'#ffffff'}}).then(setSrc).catch(()=>notify('Не удалось создать QR-код'))},[]);return <div className="qr-dialog"><h2>Спасибо вашей команде</h2><p className="muted">Гость сможет разделить чаевые поровну или выбрать вас лично.</p>{src?<img width="240" height="240" src={src} alt="QR-код страницы чаевых заведения"/>:<p>Создаём QR-код…</p>}<p className="quiet">Для открытия с телефона устройства должны быть в одной сети, а ссылка — с сетевым адресом компьютера.</p><button className="primary" onClick={()=>copy(location.origin+'/',notify)}><Copy size={18}/> Скопировать ссылку</button>{src&&<a className="secondary" href={src} download="alfa-tips-qr.png"><Download size={18}/> Скачать QR-код</a>}<button className="text-button" onClick={close}>Готово</button></div>}
-type DashboardProps={path:string;store:Store;update:(fn:(s:Store)=>Store)=>boolean;notify:(s:string)=>void;setModal:(n:React.ReactNode)=>void;close:()=>void};
-function PageHeading({eyebrow,title,text,action}:{eyebrow:string;title:string;text?:string;action?:React.ReactNode}){return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1>{text&&<p className="muted">{text}</p>}</div>{action}</div>}
-function Stat({label,value,note,icon,accent=false}:{label:string;value:string;note:string;icon:React.ReactNode;accent?:boolean}){return <div className={`stat card ${accent?'accent':''}`}><div className="stat-top"><span>{label}</span>{icon}</div><strong>{value}</strong><small>{note}</small></div>}
-function TipList({tips,store,employee,compact=false}:{tips:Tip[];store:Store;employee?:string;compact?:boolean}){if(!tips.length)return <div className="empty"><Wallet size={30}/><h3>Пока нет чаевых</h3><p>Здесь появятся благодарности гостей за выбранный период.</p></div>;return <div className="tip-list">{(compact?tips.slice(0,5):tips).map(t=><details className="tip-item" key={t.id}><summary><span className="transaction-icon"><Heart size={20}/></span><span className="tip-main"><b>{t.source==='guest'?'Благодарность гостя':'Чаевые от гостя'}</b><small>{date(t.date)} · {t.method}</small></span><span className="tip-value"><b>+{money(employee?t.allocations[employee]||0:t.amount)}</b><small className="green">Зачислено</small></span><ChevronRight size={16}/></summary><div className="tip-detail"><span className="quiet">Операция {t.id}</span><div className="receipt-lines">{Object.entries(t.allocations).map(([id,n])=><div key={id}><span>{store.employees.find(e=>e.id===id)?.name||'Удалённый сотрудник'}</span><b>{money(n)}</b></div>)}</div>{t.rating>0&&<span className="stars">{'★'.repeat(t.rating)}{'☆'.repeat(5-t.rating)}</span>}<div className="tags readonly">{t.tags.map(tag=><span key={tag}>{tag}</span>)}</div>{t.comment&&<p>«{t.comment}»</p>}</div></details>)}</div>}
-function Chart({tips,employee}:{tips:Tip[];employee?:string}){const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);const key=d.toDateString();const total=tips.filter(t=>new Date(t.date).toDateString()===key).reduce((n,t)=>n+(employee?t.allocations[employee]||0:t.amount),0);return {label:d.toLocaleDateString('ru-RU',{weekday:'short'}),total}});const max=Math.max(...days.map(d=>d.total),100);return <div className="chart" aria-label="Чаевые за последние семь дней">{days.map((d,i)=><div className="chart-column" key={i}><span className="chart-number">{money(d.total)}</span><div className="bar-area"><div className={`bar ${i===6?'today':''}`} style={{height:Math.max(3,d.total/max*100)+'%'}} title={money(d.total)}/></div><span className={i===6?'bold':''}>{d.label}</span></div>)}</div>}
-function LegacyWaiter({path,store,update,notify,setModal,close,qr}:DashboardProps&{qr:()=>void}){const [period,setPeriod]=useState(7);const alex=store.employees.find(e=>e.id==='alex')!;const all=store.tips.filter(t=>(t.allocations.alex||0)>0),filtered=all.filter(t=>inPeriod(t,period));const earned=all.reduce((n,t)=>n+(t.allocations.alex||0),0);const today=all.filter(t=>inPeriod(t,1)).reduce((n,t)=>n+t.allocations.alex,0);const reviews=all.filter(t=>t.rating>0),rating=reviews.length?(reviews.reduce((n,t)=>n+t.rating,0)/reviews.length).toFixed(1):'—';
- const withdrawal=()=>{const available=balance(store);setModal(<><div className="round-icon"><Wallet/></div><h2>Перевести на карту</h2><p className="muted">Демонстрационный вывод на карту Альфа-Банка •• 4242.</p><div className="checkout-amount">{money(available)}</div><div className="receipt-lines"><div><span>Комиссия в демо</span><b>0 ₽</b></div></div><button className="primary" disabled={available<=0} onClick={()=>{if(update(s=>withdraw(s,available))){close();notify('Демовывод выполнен. История обновлена.')}}}>Подтвердить демовывод <ArrowRight size={18}/></button><p className="quiet centered">Реального перевода на карту не будет</p></>)};
- if(path==='/waiter/profile')return <><PageHeading eyebrow="ЛИЧНЫЙ КАБИНЕТ" title="Мой профиль" text="Расскажите о себе. Гостям приятно знать, кого они благодарят."/><LegacyProfileForm store={store} update={update} notify={notify}/></>;
- if(path==='/waiter/history')return <><PageHeading eyebrow="ВАШИ БЛАГОДАРНОСТИ" title="История чаевых" action={<Period value={period} onChange={setPeriod}/>}/><section className="card padded"><SectionTitle title="Входящие чаевые" extra={<b>{money(filtered.reduce((n,t)=>n+t.allocations.alex,0))}</b>}/><TipList tips={filtered} store={store} employee="alex"/></section><section className="card padded"><SectionTitle title="Выводы на карту"/>{store.withdrawals.length?store.withdrawals.map(w=><div className="withdrawal-row" key={w.id}><Wallet size={20}/><span><b>Карта •• 4242</b><small>{date(w.date)}</small></span><b>−{money(w.amount)}</b><span className="status">Демовывод выполнен</span></div>):<p className="muted">Вы ещё не переводили чаевые на карту.</p>}</section></>;
- if(path!=='/waiter')return <Outcome icon={<Search/>} title="Раздел не найден" text="Вернитесь в кабинет сотрудника."><a href="/waiter" className="primary">В кабинет</a></Outcome>;
- return <><PageHeading eyebrow="ВАШ ЛИЧНЫЙ КАБИНЕТ" title={`Хорошего дня, ${alex.name}!`} text="Каждое спасибо — за вашу заботу." action={<button className="secondary" onClick={qr}><QrCode size={18}/> Мой QR-код</button>}/><div className="waiter-top"><div className="balance-card"><div className="balance-label"><Wallet size={19}/> Доступно к выводу </div><strong>{money(balance(store))}</strong><div className="balance-bottom"><span>Ваши чаевые уже здесь</span><button onClick={withdrawal} disabled={balance(store)<=0}>На карту <ArrowRight size={17}/></button></div><div className="balance-decoration">а</div></div><div className="goal-card card"><div className="section-title"><div className="goal-icon"><Target size={22}/></div><a href="/waiter/profile" className="text-button">Изменить <ChevronRight size={14}/></a></div><small className="muted">МОЯ ЦЕЛЬ</small><h2>{store.profile.goal}</h2><div className="goal-figures"><b>{money(earned)}</b><span>из {money(store.profile.target)}</span></div><div className="progress"><span style={{width:Math.min(100,earned/store.profile.target*100)+'%'}}/></div><p className="quiet">{earned>=store.profile.target?'Цель достигнута! Пора выбрать новую мечту.':`Уже ${Math.floor(earned/store.profile.target*100)}% пути к мечте`}</p></div></div><div className="stats three"><Stat label="Чаевые сегодня" value={money(today)} note="За текущий день" icon={<TrendingUp size={19}/>}/><Stat label="Благодарностей" value={String(all.length)} note="За всё время" icon={<Heart size={19}/>}/><Stat label="Ваша оценка" value={rating} note={`${reviews.length} оценок гостей`} icon={<Star size={19}/>}/></div><div className="dashboard-columns"><section className="card padded"><SectionTitle title="Последние чаевые" extra={<a className="text-button" href="/waiter/history">Все <ArrowRight size={16}/></a>}/><TipList tips={all} store={store} employee="alex" compact/></section><section className="card padded"><SectionTitle title="Спасибо за заботу"/><div className="review-feed">{all.filter(t=>t.comment).slice(0,3).map(t=><div key={t.id}><div className="stars">{'★'.repeat(t.rating)}</div><p>«{t.comment}»</p><small className="quiet">Гость · {date(t.date)}</small></div>)}</div></section></div><section className="card padded"><SectionTitle title="Ваша неделя" extra={<span className="quiet">Последние 7 дней</span>}/><Chart tips={all} employee="alex"/></section></>
+function EmployeeGoal({ store, employee }: { store: Store; employee: Employee }) {
+  return (
+    <span className="savings-goal">
+      <span>Моя цель</span>
+      <span>{employeeGoal(store, employee)}</span>
+    </span>
+  );
 }
-function LegacyProfileForm({store,update,notify}:{store:Store;update:DashboardProps['update'];notify:DashboardProps['notify']}){const alex=store.employees.find(e=>e.id==='alex')!;const [name,setName]=useState(alex.name),[bio,setBio]=useState(alex.bio),[goal,setGoal]=useState(store.profile.goal),[target,setTarget]=useState(String(store.profile.target/100)),[notifications,setNotifications]=useState(store.profile.notifications);return <form className="card padded settings-form" onSubmit={e=>{e.preventDefault();const n=parseAmount(target);if(n<10000||n>5000000){notify('Укажите цель от 100 до 50 000 ₽');return}if(!name.trim()||!bio.trim()||!goal.trim()){notify('Заполните имя, описание и цель');return}if(update(s=>({...s,employees:s.employees.map(e=>e.id==='alex'?{...e,name:name.trim(),bio:bio.trim()}:e),profile:{goal:goal.trim(),target:n,notifications}})))notify('Профиль сохранён — изменения видны гостям')}}><div className="profile-header"><Avatar employee={alex} large/><div><h2>{alex.name}</h2><span className="muted">Официант · {store.venue.name}</span></div></div><label>Имя для гостей<input required maxLength={30} value={name} onChange={e=>setName(e.target.value)}/></label><label>Пара слов о себе<textarea maxLength={180} required value={bio} onChange={e=>setBio(e.target.value)}/></label><div className="divider"/><h2>На что копите?</h2><label>Название цели<input required maxLength={60} value={goal} onChange={e=>setGoal(e.target.value)}/></label><label>Сумма цели, ₽<input required inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)}/></label><label className="checkbox-line"><input type="checkbox" checked={notifications} onChange={e=>setNotifications(e.target.checked)}/><span>Показывать уведомления о новых чаевых в кабинете</span></label><p className="quiet">Настройка сохраняется в демо. Push и SMS подключаются на стороне сервера.</p><button className="primary">Сохранить изменения <Check size={18}/></button></form>}
-function WaiterProfilePicker({store,current,select,close}:{store:Store;current:string;select:(id:string)=>void;close:()=>void}){return <div className="receipt-team-dialog"><span className="developer-label"><Settings size={14}/> Режим разработчика</span><h2>Открыть профиль сотрудника</h2><p className="muted">В рабочем приложении сотрудник будет авторизован под своим профилем.</p><div className="receipt-team-options">{store.employees.map(e=><button type="button" key={e.id} aria-pressed={current===e.id} className={current===e.id?'selected':''} onClick={()=>{select(e.id);close()}}><Avatar employee={e}/><span><b>{e.name}</b><small>{e.role}{e.active?'':' · на паузе'}</small></span><span className="selection-box">{current===e.id&&<Check size={15}/>}</span></button>)}</div></div>}
-function Waiter({path,store,update,notify,setModal,close,qr}:DashboardProps&{qr:()=>void}){const [period,setPeriod]=useState(7),[employeeId,setEmployeeId]=useState(()=>{try{return localStorage.getItem('alfa-tips-waiter-id')||'alex'}catch{return'alex'}});const employee=store.employees.find(e=>e.id===employeeId)||store.employees[0];useEffect(()=>{if(employee)try{localStorage.setItem('alfa-tips-waiter-id',employee.id)}catch{}},[employee]);if(!employee)return <Outcome icon={<Users/>} title="Команда пока пуста" text="Добавьте сотрудника в кабинете менеджера."><a href="/manager/team" className="primary">Открыть команду</a></Outcome>;const all=store.tips.filter(t=>(t.allocations[employee.id]||0)>0),filtered=all.filter(t=>inPeriod(t,period));const earned=all.reduce((n,t)=>n+(t.allocations[employee.id]||0),0),today=all.filter(t=>inPeriod(t,1)).reduce((n,t)=>n+t.allocations[employee.id],0),reviews=all.filter(t=>t.rating>0),rating=reviews.length?(reviews.reduce((n,t)=>n+t.rating,0)/reviews.length).toFixed(1):'—',target=employee.goalTarget||5000000,card=employee.cardLast4||'';const employeeWithdrawals=store.withdrawals.filter(w=>(w.employeeId||'alex')===employee.id);const choose=(id:string)=>{setEmployeeId(id);try{localStorage.setItem('alfa-tips-waiter-id',id)}catch{}};const switcher=<button type="button" className="waiter-profile-switch" onClick={()=>setModal(<WaiterProfilePicker store={store} current={employee.id} select={choose} close={close}/>) }><Settings size={13}/> Тест: профиль {employee.name}</button>;
- const withdrawal=()=>{const available=balance(store,employee.id);setModal(<><div className="round-icon"><Wallet/></div><h2>Перевести на карту</h2><p className="muted">{card?`Демонстрационный вывод на карту Альфа-Банка •• ${card}.`:'Сначала добавьте карту Альфа-Банка в профиле.'}</p><div className="checkout-amount">{money(available)}</div><div className="receipt-lines"><div><span>Комиссия в демо</span><b>0 ₽</b></div></div><button className="primary" disabled={available<=0||!card} onClick={()=>{if(update(s=>withdraw(s,available,employee.id))){close();notify('Демовывод выполнен. История обновлена.')}}}>Подтвердить демовывод <ArrowRight size={18}/></button><p className="quiet centered">Реального перевода на карту не будет</p></>)};
- if(path==='/waiter/profile')return <>{switcher}<PageHeading eyebrow="ЛИЧНЫЙ КАБИНЕТ" title="Мой профиль" text="Расскажите о себе. Гостям приятно знать, кого они благодарят."/><ProfileForm key={employee.id} store={store} employee={employee} update={update} notify={notify}/></>;
- if(path==='/waiter/history')return <>{switcher}<PageHeading eyebrow="ВАШИ БЛАГОДАРНОСТИ" title="История чаевых" action={<Period value={period} onChange={setPeriod}/>}/><section className="card padded"><SectionTitle title="Входящие чаевые" extra={<b>{money(filtered.reduce((n,t)=>n+t.allocations[employee.id],0))}</b>}/><TipList tips={filtered} store={store} employee={employee.id}/></section><section className="card padded"><SectionTitle title="Выводы на карту"/>{employeeWithdrawals.length?employeeWithdrawals.map(w=><div className="withdrawal-row" key={w.id}><Wallet size={20}/><span><b>Карта •• {card||'не указана'}</b><small>{date(w.date)}</small></span><b>−{money(w.amount)}</b><span className="status">Демовывод выполнен</span></div>):<p className="muted">Вы ещё не переводили чаевые на карту.</p>}</section></>;
- if(path!=='/waiter')return <Outcome icon={<Search/>} title="Раздел не найден" text="Вернитесь в кабинет сотрудника."><a href="/waiter" className="primary">В кабинет</a></Outcome>;
- return <>{switcher}<PageHeading eyebrow="ВАШ ЛИЧНЫЙ КАБИНЕТ" title={`Хорошего дня, ${employee.name}!`} text="Каждое спасибо — за вашу заботу." action={<button className="secondary" onClick={qr}><QrCode size={18}/> Мой QR-код</button>}/><div className="waiter-top"><div className="balance-card"><div className="balance-label"><Wallet size={19}/> Доступно к выводу </div><strong>{money(balance(store,employee.id))}</strong><div className="balance-bottom"><span>Ваши чаевые уже здесь</span><button onClick={withdrawal} disabled={balance(store,employee.id)<=0}>На карту <ArrowRight size={17}/></button></div><div className="balance-decoration">а</div></div><div className="goal-card card"><div className="section-title"><div className="goal-icon"><Target size={22}/></div><a href="/waiter/profile" className="text-button">Изменить <ChevronRight size={14}/></a></div><small className="muted">МОЯ ЦЕЛЬ</small><h2>{employeeGoal(store,employee)}</h2><div className="goal-figures"><b>{money(earned)}</b><span>из {money(target)}</span></div><div className="progress"><span style={{width:Math.min(100,earned/target*100)+'%'}}/></div><p className="quiet">{earned>=target?'Цель достигнута! Пора выбрать новую мечту.':`Уже ${Math.floor(earned/target*100)}% пути к мечте`}</p></div></div><div className="stats three"><Stat label="Чаевые сегодня" value={money(today)} note="За текущий день" icon={<TrendingUp size={19}/>}/><Stat label="Благодарностей" value={String(all.length)} note="За всё время" icon={<Heart size={19}/>}/><Stat label="Ваша оценка" value={rating} note={`${reviews.length} оценок гостей`} icon={<Star size={19}/>}/></div><div className="dashboard-columns"><section className="card padded"><SectionTitle title="Последние чаевые" extra={<a className="text-button" href="/waiter/history">Все <ArrowRight size={16}/></a>}/><TipList tips={all} store={store} employee={employee.id} compact/></section><section className="card padded"><SectionTitle title="Спасибо за заботу"/><div className="review-feed">{all.filter(t=>t.comment).slice(0,3).map(t=><div key={t.id}><div className="stars">{'★'.repeat(t.rating)}</div><p>«{t.comment}»</p><small className="quiet">Гость · {date(t.date)}</small></div>)}</div></section></div><section className="card padded"><SectionTitle title="Ваша неделя" extra={<span className="quiet">Последние 7 дней</span>}/><Chart tips={all} employee={employee.id}/></section></>
+function SectionTitle({
+  num,
+  title,
+  extra,
+}: {
+  num?: string;
+  title: string;
+  extra?: React.ReactNode;
+}) {
+  return (
+    <div className="section-title">
+      <h2>
+        {num && <span className="step">{num}</span>}
+        {title}
+      </h2>
+      {extra}
+    </div>
+  );
 }
-function ProfileForm({store,employee,update,notify}:{store:Store;employee:Employee;update:DashboardProps['update'];notify:DashboardProps['notify']}){const [name,setName]=useState(employee.name),[bio,setBio]=useState(employee.bio),[goal,setGoal]=useState(employeeGoal(store,employee)),[target,setTarget]=useState(String((employee.goalTarget||store.profile.target)/100)),[card,setCard]=useState(employee.cardLast4||''),[notifications,setNotifications]=useState(employee.notifications??true);return <form className="card padded settings-form" onSubmit={e=>{e.preventDefault();const n=parseAmount(target);if(n<10000||n>5000000){notify('Укажите цель от 100 до 50 000 ₽');return}if(!name.trim()||!bio.trim()||!goal.trim()){notify('Заполните имя, описание и цель');return}if(!/^\d{4}$/.test(card)){notify('Укажите последние 4 цифры карты Альфа-Банка');return}if(update(s=>({...s,employees:s.employees.map(e=>e.id===employee.id?{...e,name:name.trim(),bio:bio.trim(),goal:goal.trim(),goalTarget:n,cardLast4:card,notifications}:e),profile:employee.id==='alex'?{goal:goal.trim(),target:n,notifications}:s.profile})))notify('Профиль сохранён — изменения видны гостям')}}><div className="profile-header"><Avatar employee={employee} large/><div><h2>{employee.name}</h2><span className="muted">{employee.role} · {store.venue.name}</span></div></div><label>Имя для гостей<input required maxLength={30} value={name} onChange={e=>setName(e.target.value)}/></label><label>Пара слов о себе<textarea maxLength={180} required value={bio} onChange={e=>setBio(e.target.value)}/></label><label>Карта Альфа-Банка, последние 4 цифры<input required inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="4242" value={card} onChange={e=>setCard(e.target.value.replace(/\D/g,'').slice(0,4))}/></label><div className="divider"/><h2>На что копите?</h2><label>Название цели<input required maxLength={60} value={goal} onChange={e=>setGoal(e.target.value)}/></label><label>Сумма цели, ₽<input required inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)}/></label><label className="checkbox-line"><input type="checkbox" checked={notifications} onChange={e=>setNotifications(e.target.checked)}/><span>Показывать уведомления о новых чаевых в кабинете</span></label><p className="quiet">Настройка сохраняется в демо. Push и SMS подключаются на стороне сервера.</p><button className="primary">Сохранить изменения <Check size={18}/></button></form>}
-function Period({value,onChange}:{value:number;onChange:(v:number)=>void}){return <label className="period"><CalendarDays size={17}/><select aria-label="Период" value={value} onChange={e=>onChange(Number(e.target.value))}><option value={1}>Сегодня</option><option value={7}>Последние 7 дней</option><option value={30}>Последние 30 дней</option></select></label>}
-function Manager({path,store,update,notify,setModal,close}:DashboardProps){const [period,setPeriod]=useState(7),[search,setSearch]=useState(''),[reviewFilter,setReviewFilter]=useState('all'),[teamRole,setTeamRole]=useState('all'),[teamSort,setTeamSort]=useState('role');const tips=store.tips.filter(t=>inPeriod(t,period));const total=tips.reduce((n,t)=>n+t.amount,0);const rated=tips.filter(t=>t.rating>0);const avgRating=rated.length?(rated.reduce((n,t)=>n+t.rating,0)/rated.length).toFixed(1):'—';const pool=store.tips.filter(t=>!Object.keys(t.allocations).length).reduce((n,t)=>n+t.amount,0);
- function exportCSV(){const rows=[['Операция','Дата','Сумма ₽','Получатели','Статус','Оценка','Отзыв'],...visible.map(t=>[t.id,date(t.date),t.amount/100,Object.entries(t.allocations).map(([id,n])=>`${store.employees.find(e=>e.id===id)?.name||id}: ${money(n)}`).join('; '),'Зачислено',t.rating||'',t.comment])];download('\uFEFF'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n'),'чаевые.csv','text/csv;charset=utf-8');notify('Отчёт CSV сохранён')}
- const visible=tips.filter(t=>[t.id,t.comment,...Object.keys(t.allocations).map(id=>store.employees.find(e=>e.id===id)?.name||'')].join(' ').toLowerCase().includes(search.toLowerCase()));const roles=Array.from(new Set(store.employees.map(e=>e.role))).sort((a,b)=>a.localeCompare(b,'ru'));const team=store.employees.filter(e=>teamRole==='all'||e.role===teamRole).sort((a,b)=>teamSort==='name'?a.name.localeCompare(b.name,'ru'):teamSort==='status'?Number(b.active)-Number(a.active)||a.name.localeCompare(b.name,'ru'):a.role.localeCompare(b.role,'ru')||a.name.localeCompare(b.name,'ru'));
- function distribute(){setModal(<><div className="round-icon"><Users/></div><h2>Распределить чаевые</h2><p className="muted">Все нераспределённые чаевые заведения — {money(pool)} — будут зачислены по текущему правилу.</p><div className="receipt-lines">{venueRule(store).ids.map((id,i)=><div key={id}><span>{store.employees.find(e=>e.id===id)?.name}</span><b>{displayedShare(venueRule(store).shares[i])}%</b></div>)}</div><button className="primary" onClick={()=>{if(update(distributePool)){close();notify('Чаевые распределены. Кабинет сотрудника обновлён.')}}}>Распределить {money(pool)} <Check size={18}/></button><p className="quiet centered">Сумма сохраняется с точностью до копейки</p></>)}
- function askDelete(employee:Employee){setModal(<div className="delete-employee-dialog"><div className="round-icon danger-icon"><UserRound/></div><h2>Удалить {employee.name}?</h2><p className="muted">Сотрудник исчезнет из команды и выбора для новых чаевых. Уже полученные чаевые останутся в истории.</p><button className="danger-button" onClick={()=>{if(update(s=>{const employees=s.employees.filter(e=>e.id!==employee.id),ids=employees.filter(e=>e.active).map(e=>e.id);return {...s,employees,settings:{recipientIds:ids,shares:equalShares(ids)}}})){close();notify('Сотрудник удалён из команды')}}}><X size={18}/> Удалить сотрудника</button><button className="secondary" onClick={close}>Отмена</button></div>)}
- if(path==='/manager/settings')return <><PageHeading eyebrow="КАБИНЕТ ЗАВЕДЕНИЯ" title="Настройки заведения" text="Информация и правила, которые увидят ваши гости."/><VenueForm store={store} update={update} notify={notify}/></>;
- if(path==='/manager/team')return <><PageHeading eyebrow="ЛЮДИ, КОТОРЫЕ СОЗДАЮТ АТМОСФЕРУ" title="Ваша команда" text={`${store.employees.filter(e=>e.active).length} сотрудников принимают благодарности`} action={<button className="primary compact" onClick={()=>setModal(<EmployeeForm update={update} notify={notify} close={close}/>)}><Plus size={18}/> Добавить сотрудника</button>}/><div className="team-controls card"><label>Показать тип<select aria-label="Фильтр по типу занятости" value={teamRole} onChange={e=>setTeamRole(e.target.value)}><option value="all">Все типы</option>{roles.map(role=><option key={role}>{role}</option>)}</select></label><label>Сортировка<select aria-label="Сортировка команды" value={teamSort} onChange={e=>setTeamSort(e.target.value)}><option value="role">По типу занятости</option><option value="name">По имени</option><option value="status">По статусу</option></select></label></div><div className="team-grid">{team.map(e=>{const amount=store.tips.reduce((n,t)=>n+(t.allocations[e.id]||0),0);return <article className="card employee-card" key={e.id}><div className="row-between"><Avatar employee={e} large/><span className={`status ${e.active?'':'inactive'}`}>{e.active?'Принимает чаевые':'На паузе'}</span></div><h2>{e.name}</h2><p className="muted">{e.role}</p><p className="employee-card-number"><CreditCard size={15}/>{e.cardLast4?`Карта Альфа-Банка •• ${e.cardLast4}`:'Карта не указана'}</p><div className="employee-income"><small>Всего чаевых</small><b>{money(amount)}</b></div><p className="employee-bio">{e.bio||'Описание пока не добавлено'}</p><div className="employee-actions"><button className="secondary" onClick={()=>setModal(<EmployeeForm employee={e} update={update} notify={notify} close={close}/>)}><Settings size={16}/> Изменить</button><button className="secondary" onClick={()=>{if(update(s=>({...s,employees:s.employees.map(x=>x.id===e.id?{...x,active:!x.active}:x)})))notify(e.active?'Приём чаевых приостановлен':'Сотрудник снова принимает чаевые')}}>{e.active?'Приостановить приём':'Включить приём'}</button><button className="delete-employee" aria-label={`Удалить сотрудника ${e.name}`} onClick={()=>askDelete(e)}><X size={17}/> Удалить</button></div></article>})}</div>{!team.length&&<div className="empty card"><Users/><h3>Нет сотрудников этого типа</h3><p>Выберите другой фильтр или добавьте нового сотрудника.</p></div>}<div className="info-box"><Info size={20}/><span>Сотрудники на паузе не показываются в выборе для новых чаевых. Изменения команды сразу доступны на странице оплаты.</span></div></>;
- if(path==='/manager/reviews'){const reviews=tips.filter(t=>t.rating||t.comment||t.tags.length).filter(t=>reviewFilter==='all'||(reviewFilter==='new'?!t.reviewed:!!t.rating&&t.rating<=3));return <><PageHeading eyebrow="ГОЛОС ВАШИХ ГОСТЕЙ" title="Отзывы и благодарности" text="Что радует гостей и что можно сделать лучше." action={<Period value={period} onChange={setPeriod}/>}/><div className="review-overview card"><div><strong>{avgRating}</strong><span className="stars">★</span><p className="muted">Средняя оценка · {rated.length} оценок</p></div><div className="tags readonly">{tagOptions.map(tag=>{const count=tips.filter(t=>t.tags.includes(tag)).length;return <span key={tag}>{tag} <b>{count}</b></span>})}</div></div><div className="filter-tabs">{[['all','Все отзывы'],['new','Непрочитанные'],['low','Нужны улучшения']].map(([v,l])=><button className={reviewFilter===v?'active':''} key={v} onClick={()=>setReviewFilter(v)}>{l}</button>)}</div><div className="reviews-grid">{reviews.length?reviews.map(t=><article className="card review-card" key={t.id}><div className="row-between"><div className="review-author"><span className="anonymous"><UserRound size={20}/></span><div><b>Гость заведения</b><small>{date(t.date)}</small></div></div>{!t.reviewed&&<span className="new-dot" title="Непрочитанный"/>}</div>{t.rating>0&&<p className="stars">{'★'.repeat(t.rating)}{'☆'.repeat(5-t.rating)}</p>}<p>{t.comment||'Гость оставил оценку без комментария'}</p><div className="tags readonly">{t.tags.map(tag=><span key={tag}>{tag}</span>)}</div><div className="review-footer"><span>{money(t.amount)} · {Object.keys(t.allocations).map(id=>store.employees.find(e=>e.id===id)?.name).join(', ')||'Заведению'}</span><button className="text-button" disabled={t.reviewed} onClick={()=>{if(update(s=>({...s,tips:s.tips.map(x=>x.id===t.id?{...x,reviewed:true}:x)})))notify('Отзыв отмечен прочитанным')}}><CheckCheck size={16}/>{t.reviewed?'Прочитано':'Прочитано?'}</button></div></article>):<div className="empty"><MessageSquare/><h3>Таких отзывов пока нет</h3><p>Выберите другой фильтр или период.</p></div>}</div></>}
- if(path==='/manager/tips')return <><PageHeading eyebrow="ВСЯ БЛАГОДАРНОСТЬ В ОДНОМ МЕСТЕ" title="Все чаевые" action={<button className="secondary" onClick={exportCSV}><Download size={18}/> Скачать CSV</button>}/><section className="card padded"><div className="filters"><label className="search"><Search size={18}/><input placeholder="Имя, отзыв или номер операции" aria-label="Поиск чаевых" value={search} onChange={e=>setSearch(e.target.value)}/></label><Period value={period} onChange={setPeriod}/></div><div className="section-title"><span className="muted">Найдено операций: {visible.length}</span><b>{money(visible.reduce((n,t)=>n+t.amount,0))}</b></div><TipList tips={visible} store={store}/></section></>;
- if(path!=='/manager')return <Outcome icon={<Search/>} title="Раздел не найден" text="Вернитесь в кабинет заведения."><a href="/manager" className="primary">В кабинет</a></Outcome>;
- return <><PageHeading eyebrow="КАБИНЕТ ЗАВЕДЕНИЯ" title="Большое спасибо вашей команде" text={`${store.venue.name} · ${store.venue.address}`} action={<Period value={period} onChange={setPeriod}/>}/><div className="stats three"><Stat accent label="Всего чаевых" value={money(total)} note="За выбранный период" icon={<Wallet size={19}/>}/><Stat label="Средние чаевые" value={money(tips.length?Math.round(total/tips.length):0)} note={`${tips.length} благодарностей гостей`} icon={<TrendingUp size={19}/>}/><Stat label="Оценка гостей" value={avgRating} note={`${rated.length} оценок за период`} icon={<Star size={19}/>}/></div><div className="manager-middle"><section className="card padded"><SectionTitle title="Чаевые за неделю" extra={<span className="quiet">Последние 7 дней</span>}/><Chart tips={store.tips}/></section><section className="card padded"><SectionTitle title="За что говорят спасибо"/><div className="tag-chart">{tagOptions.map(tag=>{const count=tips.filter(t=>t.tags.includes(tag)).length;return <div key={tag}><div><span>{tag}</span><b>{count}</b></div><div className="progress"><span style={{width:tips.length?count/tips.length*100+'%':'0%'}}/></div></div>})}</div></section></div><div className="dashboard-columns"><section className="card padded"><SectionTitle title="Последние благодарности" extra={<a className="text-button" href="/manager/tips">Все <ArrowRight size={16}/></a>}/><TipList tips={tips} store={store} compact/></section><section className="card padded"><SectionTitle title="Ваша команда" extra={<a className="text-button" href="/manager/team">Открыть <ArrowRight size={16}/></a>}/><div className="team-ranking">{store.employees.map(e=><div key={e.id}><Avatar employee={e}/><span><b>{e.name}</b><small>{e.role}</small></span><b>{money(tips.reduce((n,t)=>n+(t.allocations[e.id]||0),0))}</b></div>)}</div><p className="quiet">Суммы отражают долю каждого сотрудника.</p></section></div></>
+function EmployeeDetails({
+  store,
+  employee,
+  selected,
+  toggle,
+  close,
+}: {
+  store: Store;
+  employee: Employee;
+  selected: boolean;
+  toggle: () => void;
+  close: () => void;
+}) {
+  return (
+    <div className="employee-details">
+      <Avatar employee={employee} large />
+      <p className="eyebrow">{employee.role}</p>
+      <h2>{employee.name}</h2>
+      <p className="muted">{employee.bio || 'Будет рад вашей благодарности.'}</p>
+      <div className="employee-goal-detail">
+        <Target size={20} />
+        <span>
+          <small>Копит на</small>
+          <b>{employeeGoal(store, employee)}</b>
+        </span>
+      </div>
+      <button
+        className={selected ? 'secondary' : 'primary'}
+        onClick={() => {
+          toggle();
+          close();
+        }}
+      >
+        {selected ? (
+          <>
+            <X size={18} /> Убрать из получателей
+          </>
+        ) : (
+          <>
+            <Check size={18} /> Выбрать сотрудника
+          </>
+        )}
+      </button>
+    </div>
+  );
 }
-function EmployeeForm({employee,update,notify,close}:{employee?:Employee;update:DashboardProps['update'];notify:DashboardProps['notify'];close:()=>void}){const [name,setName]=useState(employee?.name||''),[role,setRole]=useState(employee?.role||'Официант'),[card,setCard]=useState(employee?.cardLast4||'');const editing=!!employee;return <form className="settings-form" onSubmit={e=>{e.preventDefault();if(!name.trim()||!role.trim()){notify('Введите имя и тип занятости');return}if(!/^\d{4}$/.test(card)){notify('Укажите последние 4 цифры карты Альфа-Банка');return}const initials=name.trim().split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();if(update(s=>({...s,employees:editing?s.employees.map(x=>x.id===employee.id?{...x,name:name.trim(),role:role.trim(),initials,cardLast4:card}:x):[...s.employees,{id:createId(),name:name.trim(),role:role.trim(),initials,active:true,color:'sage',bio:'',goal:'Цель пока не указана',goalTarget:5000000,cardLast4:card,notifications:true}]}))){close();notify(editing?'Данные сотрудника обновлены':'Сотрудник добавлен и доступен для привязки к чеку')}}}><h2>{editing?'Изменить сотрудника':'Новый сотрудник'}</h2><p className="muted">{editing?'Обновите данные, которые использует заведение. Личную цель сотрудник меняет сам.':'Добавьте человека в команду заведения. Цель он заполнит самостоятельно в своём профиле.'}</p><label>Имя<input autoFocus required maxLength={30} placeholder="Например, Анна" value={name} onChange={e=>setName(e.target.value)}/></label><label>Тип занятости<input required list="employee-role-options" maxLength={40} placeholder="Например, парикмахер" value={role} onChange={e=>setRole(e.target.value)}/><datalist id="employee-role-options"><option value="Официант"/><option value="Повар"/><option value="Бармен"/><option value="Бариста"/><option value="Хостес"/><option value="Парикмахер"/><option value="Мастер"/><option value="Администратор"/></datalist></label><label>Карта Альфа-Банка, последние 4 цифры<input required inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="4242" value={card} onChange={e=>setCard(e.target.value.replace(/\D/g,'').slice(0,4))}/></label><button className="primary">{editing?'Сохранить изменения':'Добавить в команду'} {editing?<Check size={18}/>:<Plus size={18}/>}</button></form>}
-function LegacyVenueForm({store,update,notify}:{store:Store;update:DashboardProps['update'];notify:DashboardProps['notify']}){const ids=activeIds(store);const [name,setName]=useState(store.venue.name),[address,setAddress]=useState(store.venue.address),[mapUrl,setMapUrl]=useState(safeMapUrl(store.venue.mapUrl,store.venue.address)),[bill,setBill]=useState(String(store.venue.bill/100)),[shares,setShares]=useState(venueRule(store).shares);return <form className="card padded settings-form" onSubmit={e=>{e.preventDefault();if(!name.trim()||!address.trim()){notify('Укажите название и адрес');return}try{const url=new URL(mapUrl);if(!['https:','http:'].includes(url.protocol))throw new Error()}catch{notify('Укажите ссылку на карту, начинающуюся с https:// или http://');return}try{if(ids.length)allocate(100,ids,shares)}catch{notify('Доли должны составлять 100%');return}const amount=parseAmount(bill);if(amount<=0){notify('Укажите положительную сумму счёта');return}if(update(s=>({...s,venue:{...s.venue,name:name.trim(),address:address.trim(),bill:amount,mapUrl:mapUrl.trim()},settings:{shares:[...shares],recipientIds:ids}})))notify('Настройки сохранены. Новый гость увидит изменения.')}}><h2>Информация для гостя</h2><label>Название заведения<input required maxLength={50} value={name} onChange={e=>setName(e.target.value)}/></label><label>Адрес<input required maxLength={120} value={address} onChange={e=>setAddress(e.target.value)}/></label><label>Ссылка на карту<input type="url" required maxLength={2000} value={mapUrl} onChange={e=>setMapUrl(e.target.value)} placeholder="https://www.google.com/maps/…"/></label><p className="quiet">Гость откроет эту ссылку нажатием на адрес. Можно указать Google Карты, Яндекс Карты или другой картографический сервис.</p><label>Сумма демонстрационного счёта, ₽<input required inputMode="decimal" value={bill} onChange={e=>setBill(e.target.value)}/></label><button className="primary">Сохранить настройки <Check size={18}/></button></form>}
-function VenueForm({store,update,notify}:{store:Store;update:DashboardProps['update'];notify:DashboardProps['notify']}){const [name,setName]=useState(store.venue.name),[address,setAddress]=useState(store.venue.address),[mapUrl,setMapUrl]=useState(safeMapUrl(store.venue.mapUrl,store.venue.address)),[bill,setBill]=useState(String(store.venue.bill/100));return <form className="card padded settings-form" onSubmit={e=>{e.preventDefault();if(!name.trim()||!address.trim()){notify('Укажите название и адрес');return}try{const url=new URL(mapUrl);if(!['https:','http:'].includes(url.protocol))throw new Error()}catch{notify('Укажите ссылку на карту, начинающуюся с https:// или http://');return}const amount=parseAmount(bill);if(amount<=0){notify('Укажите положительную сумму счёта');return}if(update(s=>({...s,venue:{...s.venue,name:name.trim(),address:address.trim(),bill:amount,mapUrl:mapUrl.trim()}})))notify('Настройки сохранены. Новый гость увидит изменения.')}}><h2>Информация для гостя</h2><label>Название заведения<input required maxLength={50} value={name} onChange={e=>setName(e.target.value)}/></label><label>Адрес<input required maxLength={120} value={address} onChange={e=>setAddress(e.target.value)}/></label><label>Ссылка на карту<input type="url" required maxLength={2000} value={mapUrl} onChange={e=>setMapUrl(e.target.value)} placeholder="https://www.google.com/maps/…"/></label><p className="quiet">Гость откроет эту ссылку нажатием на адрес. Можно указать Google Карты, Яндекс Карты или другой картографический сервис.</p><label>Сумма демонстрационного счёта, ₽<input required inputMode="decimal" value={bill} onChange={e=>setBill(e.target.value)}/></label><button className="primary">Сохранить настройки <Check size={18}/></button></form>}
-export class ErrorBoundary extends React.Component<{children:React.ReactNode},{error:boolean}>{state={error:false};static getDerivedStateFromError(){return{error:true}}render(){return this.state.error?<main className="narrow"><div className="card padded"><h1>Не удалось открыть демо</h1><p>Произошла ошибка при загрузке страницы. Попробуйте обновить её — сохранённые данные останутся в браузере.</p><button className="primary" onClick={()=>location.reload()}>Обновить страницу</button><button className="secondary" onClick={()=>{try{download(localStorage.getItem('alfa-tips-demo-v1')||'{}','alfa-tips-backup.json','application/json')}catch{alert('Хранилище браузера недоступно')}}}>Скачать сохранённые данные</button><button className="primary" onClick={()=>{try{localStorage.removeItem('alfa-tips-demo-v1');localStorage.removeItem('alfa-tips-draft-v3');sessionStorage.removeItem('tip-draft');location.href='/'}catch{alert('Разрешите локальное хранилище браузера')}}}>Начать демо заново</button></div></main>:this.props.children}}
+function ReceiptTeamDialog({
+  store,
+  current,
+  apply,
+  close,
+}: {
+  store: Store;
+  current: string[];
+  apply: (ids: string[]) => void;
+  close: () => void;
+}) {
+  const available = store.employees.filter((e) => e.active);
+  const [ids, setIds] = useState(current);
+  return (
+    <div className="receipt-team-dialog">
+      <span className="developer-label">
+        <Settings size={14} /> Режим разработчика
+      </span>
+      <h2>Кто обслуживал этот чек?</h2>
+      <p className="muted">На настоящей странице этот список придёт с бэкенда вместе с чеком.</p>
+      <div className="receipt-team-options">
+        {available.map((e) => {
+          const on = ids.includes(e.id);
+          return (
+            <button
+              type="button"
+              key={e.id}
+              aria-pressed={on}
+              className={on ? 'selected' : ''}
+              onClick={() => setIds(on ? ids.filter((id) => id !== e.id) : [...ids, e.id])}
+            >
+              <Avatar employee={e} />
+              <span>
+                <b>{e.name}</b>
+                <small>{e.role}</small>
+              </span>
+              <span className="selection-box">{on && <Check size={15} />}</span>
+            </button>
+          );
+        })}
+      </div>
+      {!ids.length && <p className="error">Выберите хотя бы одного сотрудника</p>}
+      <button
+        className="primary"
+        disabled={!ids.length}
+        onClick={() => {
+          apply(ids);
+          close();
+        }}
+      >
+        Применить к чеку <Check size={18} />
+      </button>
+    </div>
+  );
+}
+function Guest({
+  store,
+  initialDraft,
+  notify,
+  setModal,
+  close,
+}: {
+  store: Store;
+  initialDraft: Draft;
+  notify: (s: string) => void;
+  setModal: (n: React.ReactNode) => void;
+  close: () => void;
+}) {
+  const [draft, setD] = useState<Draft>(() => {
+    const visit = readVisit(store, initialDraft),
+      prepared = prepareDraft(
+        {
+          ...initialDraft,
+          visitedAt: visit.at,
+          visitBill: visit.bill,
+          visitMode: visit.deferred ? 'later' : undefined,
+        },
+        store,
+      );
+    saveDraft(prepared);
+    return prepared;
+  });
+  const d = prepareDraft(draft, store),
+    servedIds = d.servedIds || [],
+    ids = d.recipientIds || [];
+  const employees = servedIds
+      .map((id) => store.employees.find((e) => e.id === id))
+      .filter((e): e is Employee => !!e),
+    selectedSet = new Set(ids);
+  const [error, setError] = useState('');
+  const amount = parseAmount(d.amount);
+  const visit = readVisit(store, d);
+  function patch(part: Partial<Draft>) {
+    try {
+      setD((current) => {
+        const next = { ...prepareDraft(current, store), ...part };
+        saveDraft(next);
+        return next;
+      });
+      setError('');
+    } catch {
+      setError('Не удалось сохранить выбор. Разрешите хранение данных в браузере.');
+    }
+  }
+  function toggleRecipient(id: string) {
+    const next = selectedSet.has(id) ? ids.filter((x) => x !== id) : [...ids, id];
+    patch({ recipientIds: next, recipient: next[0] || '', shares: equalShares(next) });
+  }
+  function valid() {
+    if (amount < MIN_TIP || amount > MAX_TIP) {
+      setError('Введите сумму от 10 до 50 000 ₽');
+      document.getElementById('amount')?.focus();
+      return false;
+    }
+    if (!ids.length) {
+      setError('Выберите хотя бы одного сотрудника');
+      document.querySelector('.recipients-section')?.scrollIntoView({ behavior: 'smooth' });
+      return false;
+    }
+    return true;
+  }
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid()) return;
+    try {
+      saveDraft(d);
+      go('/payment');
+    } catch {
+      setError('Не удалось сохранить платёж');
+    }
+  }
+  function postpone() {
+    if (!valid()) return;
+    const portable = {
+      ...d,
+      visitMode: 'later' as const,
+      venueSnapshot: store.venue,
+      employeeSnapshots: employees,
+    };
+    try {
+      saveDraft(portable);
+      go('/later');
+    } catch {
+      notify('Не удалось сохранить ссылку');
+    }
+  }
+  function changeServed(next: string[]) {
+    patch({
+      servedIds: next,
+      recipientIds: next,
+      recipient: next[0] || '',
+      shares: equalShares(next),
+    });
+  }
+  return (
+    <main className="guest-layout guest-focused">
+      <div className="guest-heading">
+        <h1>Оставить чаевые</h1>
+        <span>Счёт {money(visit.bill)}</span>
+      </div>
+      <form className="tip-form" onSubmit={submit} noValidate>
+        <section className="form-section amount-section">
+          <SectionTitle title="Сколько оставим?" />
+          <div className="amount-input">
+            <input
+              id="amount"
+              style={{ width: `${Math.max(1, d.amount.length)}ch` }}
+              aria-label="Своя сумма чаевых"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="0"
+              maxLength={5}
+              value={d.amount}
+              onChange={(e) => patch({ amount: sanitizeTipAmount(e.target.value) })}
+            />
+            <span>₽</span>
+          </div>
+          <div className="amount-presets">
+            {[5, 10, 15].map((p) => {
+              const preset = Math.min(MAX_TIP, Math.round((visit.bill * p) / 100));
+              return (
+                <button
+                  type="button"
+                  key={p}
+                  className={amount === preset ? 'active' : ''}
+                  onClick={() => patch({ amount: String(preset / 100) })}
+                >
+                  <b>{p}%</b>
+                  <span>{money(preset)}</span>
+                </button>
+              );
+            })}
+            <button type="button" onClick={() => document.getElementById('amount')?.focus()}>
+              <SlidersHorizontal size={18} />
+              <span>Своя сумма</span>
+            </button>
+          </div>
+        </section>
+        <section className="form-section recipients-section">
+          <SectionTitle title="Кому оставим?" />
+          <p className="recipient-instruction">
+            Нажмите на карточки, чтобы выбрать одного или нескольких сотрудников
+          </p>
+          <div
+            className={`equal-recipients receipt-recipients team-size-${Math.min(employees.length, 3)}`}
+            role="list"
+            aria-label="Сотрудники, обслуживавшие чек"
+          >
+            {employees.map((e) => {
+              const selected = selectedSet.has(e.id);
+              return (
+                <article
+                  className={`equal-recipient receipt-recipient ${selected ? 'chosen' : ''}`}
+                  key={e.id}
+                  role="listitem"
+                >
+                  <button
+                    type="button"
+                    className="employee-select"
+                    aria-pressed={selected}
+                    onClick={() => toggleRecipient(e.id)}
+                  >
+                    <Avatar employee={e} />
+                    <b>{e.name}</b>
+                    <small>{e.role}</small>
+                    <strong>
+                      {selected
+                        ? amount > 0
+                          ? equalAmountLabel(amount, ids.length)
+                          : ids.length > 1
+                            ? `1/${ids.length} суммы`
+                            : 'Вся сумма'
+                        : 'Не выбран'}
+                    </strong>
+                    <span className="recipient-check">{selected && <Check size={13} />}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="employee-more"
+                    onClick={() =>
+                      setModal(
+                        <EmployeeDetails
+                          store={store}
+                          employee={e}
+                          selected={selected}
+                          toggle={() => toggleRecipient(e.id)}
+                          close={close}
+                        />,
+                      )
+                    }
+                  >
+                    <Info size={15} /> Подробнее
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+          {!employees.length && (
+            <p className="error">К этому чеку пока не привязан ни один сотрудник.</p>
+          )}
+          {error && (
+            <p className="error recipient-error" role="alert">
+              {error}
+            </p>
+          )}
+        </section>
+        <section className="form-section">
+          <SectionTitle title="Как вам у нас?" />
+          <div className="rating" role="group" aria-label="Оценка визита">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-label={`Оценка ${n} из 5`}
+                aria-pressed={d.rating === n}
+                onClick={() => patch({ rating: d.rating === n ? 0 : n })}
+              >
+                <Star
+                  size={32}
+                  fill={n <= d.rating ? 'currentColor' : 'none'}
+                  className={n <= d.rating ? 'filled' : ''}
+                />
+              </button>
+            ))}
+            <span>
+              {
+                [
+                  'Впечатления?',
+                  'Очень плохо',
+                  'Не понравилось',
+                  'Неплохо',
+                  'Хорошо',
+                  'Всё прекрасно!',
+                ][d.rating]
+              }
+            </span>
+          </div>
+          <div className="quick-tags">
+            <span>Быстро отметить, что понравилось</span>
+            <div className="tags" role="group" aria-label="Что понравилось">
+              {tagOptions.map((tag) => (
+                <button
+                  type="button"
+                  aria-pressed={d.tags.includes(tag)}
+                  className={d.tags.includes(tag) ? 'active' : ''}
+                  key={tag}
+                  onClick={() =>
+                    patch({
+                      tags: d.tags.includes(tag)
+                        ? d.tags.filter((t) => t !== tag)
+                        : [...d.tags, tag],
+                    })
+                  }
+                >
+                  {d.tags.includes(tag) ? <Check size={15} /> : <Plus size={15} />} {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="review-label" htmlFor="review">
+            Что вам понравилось?
+          </label>
+          <textarea
+            id="review"
+            placeholder="Пара слов, которые сделают чей-то день лучше"
+            maxLength={500}
+            rows={3}
+            value={d.comment}
+            onChange={(e) => patch({ comment: e.target.value })}
+          />
+          <div className="textarea-bottom">
+            <small>{d.comment.length}/500</small>
+          </div>
+        </section>
+        <section className="form-section payment-section">
+          <SectionTitle title="Способ оплаты" />
+          <div className="payment-options">
+            {[
+              { value: 'СБП', label: 'СБП', note: 'Оплата через выбранный банк · демо' },
+              { value: 'Alfa Pay', label: 'Alfa Pay', note: 'Быстрее с Alfa ID · Двойные бонусы' },
+              { value: 'Карта', label: 'Карта', note: 'Демо-карта без ввода реквизитов' },
+            ].map((method) => (
+              <button
+                type="button"
+                aria-pressed={
+                  d.method === method.value || (method.value === 'Alfa Pay' && isAlfaPay(d.method))
+                }
+                className={
+                  d.method === method.value || (method.value === 'Alfa Pay' && isAlfaPay(d.method))
+                    ? 'active'
+                    : ''
+                }
+                key={method.value}
+                onClick={() => patch({ method: method.value })}
+              >
+                {method.value === 'СБП' ? (
+                  <span className="sbp-mark">➤</span>
+                ) : method.value === 'Alfa Pay' ? (
+                  <span className="tiny-alfa">А</span>
+                ) : (
+                  <CreditCard size={20} />
+                )}
+                <span>
+                  <b>{method.label}</b>
+                  <small>{method.note}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="orange-earn-preview">
+            <Gift size={18} />
+            <span>
+              За это спасибо начислим <b>{rewardForTip(amount, d.method)} бонусов</b>
+              {isAlfaPay(d.method) ? ' — вдвое больше с Alfa Pay.' : '.'}
+            </span>
+          </div>
+          <div className="fee-line">
+            <span>Комиссия в демо</span>
+            <b>0 ₽</b>
+          </div>
+          <div className="mobile-pay">
+            <div className="pay-summary">
+              <span>Итого к оплате</span>
+              <b>{money(amount)}</b>
+            </div>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="primary" type="submit">
+              Сказать спасибо {amount > 0 ? money(amount) : ''}
+              <Heart size={19} />
+            </button>
+          </div>
+          <div className="later-actions">
+            <button type="button" className="later-save" onClick={postpone}>
+              <Clock size={19} />
+              <span>
+                <b>Оставить чаевые позже</b>
+                <small>Сохранить заполненную страницу по ссылке</small>
+              </span>
+              <ChevronRight size={18} />
+            </button>
+            <a className="skip-tip" href="/thanks">
+              Без чаевых
+            </a>
+          </div>
+          <button
+            type="button"
+            className="dev-receipt-button"
+            onClick={() =>
+              setModal(
+                <ReceiptTeamDialog
+                  store={store}
+                  current={servedIds}
+                  apply={changeServed}
+                  close={close}
+                />,
+              )
+            }
+          >
+            <Settings size={14} /> Тест: кто обслуживал этот чек
+          </button>
+        </section>
+      </form>
+    </main>
+  );
+}
+function Payment({ store }: { store: Store }) {
+  const [d] = useState(() => prepareDraft(loadDraft(), store));
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const lock = useRef(false);
+  const amount = parseAmount(d.amount),
+    ids = d.recipientIds || [],
+    alfaPay = isAlfaPay(d.method),
+    identity = readAlfaIdentity(),
+    oranges = rewardForTip(amount, d.method);
+  let distribution: Record<string, number> = {};
+  try {
+    distribution = allocate(amount, ids, equalShares(ids));
+  } catch {}
+  async function pay() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const tip = await confirmPayment(d);
+      saveDraft(nextDraftAfterPayment(d));
+      go('/success/' + tip.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отправить чаевые');
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  const paymentDescription =
+    d.method === 'Карта'
+      ? 'Демонстрационная карта •• 4242. Вводить реквизиты не нужно.'
+      : d.method === 'СБП'
+        ? 'В реальном сервисе откроется приложение выбранного банка. Сейчас можно проверить сценарий оплаты.'
+        : 'Alfa Pay подтверждается после входа через Alfa ID. За чаевые в этом способе начисляется двойное количество бонусов.';
+  return (
+    <main className="narrow">
+      <a className="back" href="/">
+        <ArrowLeft size={18} /> Изменить чаевые
+      </a>
+      <div className="checkout card">
+        <div className="round-icon">
+          <ShieldCheck />
+        </div>
+        <span className="eyebrow">ПРОВЕРЬТЕ ПЕРЕД ОПЛАТОЙ</span>
+        <h1>Ваше спасибо</h1>
+        <div className="checkout-amount">{money(amount)}</div>
+        <p className="muted">
+          {store.venue.name} · {store.venue.address}
+        </p>
+        <div className="receipt-lines">
+          {Object.entries(distribution).map(([id, n]) => (
+            <div key={id}>
+              <span>
+                {store.employees.find((e) => e.id === id)?.name} ·{' '}
+                {store.employees.find((e) => e.id === id)?.role}
+              </span>
+              <b>{money(n)}</b>
+            </div>
+          ))}
+          {!Object.keys(distribution).length && (
+            <div>
+              <span>Заведению · ожидает распределения</span>
+              <b>{money(amount)}</b>
+            </div>
+          )}
+          <div>
+            <span>Способ оплаты</span>
+            <b>{alfaPay ? 'Alfa Pay' : d.method}</b>
+          </div>
+          <div>
+            <span>Бонусы за чаевые</span>
+            <b className="orange-value">+{oranges}</b>
+          </div>
+          <div>
+            <span>Комиссия в демо</span>
+            <b>0 ₽</b>
+          </div>
+          <div className="total">
+            <span>Всего</span>
+            <b>{money(amount)}</b>
+          </div>
+        </div>
+        <div className="info-box">
+          <Info size={20} />
+          <span>{paymentDescription}</span>
+        </div>
+        {alfaPay && !identity && (
+          <a className="alfa-pay-gate" href={`/alfa-id?return=${encodeURIComponent('/payment')}`}>
+            <LogIn size={19} />
+            <span>
+              <b>Войдите с Alfa ID</b>
+              <small>После входа вернём вас к подтверждению Alfa Pay</small>
+            </span>
+            <ArrowRight size={18} />
+          </a>
+        )}
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        {alfaPay && !identity ? null : (
+          <button className="primary" disabled={busy} onClick={pay}>
+            {busy ? (
+              <>
+                <span className="spinner" /> Отправляем спасибо…
+              </>
+            ) : (
+              <>
+                Подтвердить демооплату <ArrowRight size={19} />
+              </>
+            )}
+          </button>
+        )}
+        <button
+          disabled={busy}
+          className="text-button failure-button"
+          onClick={() => go('/payment-error')}
+        >
+          Проверить сценарий ошибки
+        </button>
+        <p className="quiet centered">Реальные деньги не списываются</p>
+      </div>
+    </main>
+  );
+}
+function Outcome({
+  icon,
+  title,
+  text,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="narrow">
+      <div className="outcome card">
+        <div className="round-icon">{icon}</div>
+        <h1>{title}</h1>
+        <p className="muted">{text}</p>
+        <div className="outcome-actions">{children}</div>
+      </div>
+    </main>
+  );
+}
+function Later({ store, notify }: { store: Store; notify: (s: string) => void }) {
+  const d = prepareDraft(loadDraft(), store),
+    employees = (d.servedIds || [])
+      .map((id) => store.employees.find((e) => e.id === id))
+      .filter((e): e is Employee => !!e);
+  const portable = {
+    ...d,
+    visitMode: 'later' as const,
+    venueSnapshot: store.venue,
+    employeeSnapshots: employees,
+  };
+  const link = laterLink(store, portable),
+    names = (d.recipientIds || [])
+      .map((id) => store.employees.find((e) => e.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+  return (
+    <main className="narrow">
+      <div className="outcome card later-card">
+        <div className="round-icon">
+          <Clock />
+        </div>
+        <h1>Спасибо подождёт</h1>
+        <p className="muted">
+          Ссылка сохранит место, сумму и выбранных сотрудников. Её можно открыть на другом
+          устройстве — останется только подтвердить оплату.
+        </p>
+        <div className="later-summary">
+          <div>
+            <span>Заведение</span>
+            <b>{store.venue.name}</b>
+          </div>
+          <div>
+            <span>Сумма</span>
+            <b>{money(parseAmount(d.amount))}</b>
+          </div>
+          <div>
+            <span>Получатели</span>
+            <b>{names || 'Не выбраны'}</b>
+          </div>
+        </div>
+        <div className="outcome-actions">
+          <button className="primary" onClick={() => copy(link, notify)}>
+            Скопировать ссылку <Copy size={19} />
+          </button>
+          <a className="secondary" href={link}>
+            Открыть сохранённую страницу <ArrowRight size={18} />
+          </a>
+          <a className="text-button" href="/">
+            Вернуться к чаевым
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
+function Success({ store, id, notify }: { store: Store; id: string; notify: (s: string) => void }) {
+  const t = store.tips.find((t) => t.id === id);
+  if (!t)
+    return (
+      <Outcome
+        icon={<Receipt />}
+        title="Операция не найдена"
+        text="Этот перевод не сохранён в текущем браузере."
+      >
+        <a className="primary" href="/history">
+          Открыть историю
+        </a>
+      </Outcome>
+    );
+  return (
+    <main className="narrow">
+      <div className="outcome card success">
+        <div className="success-art">
+          <span className="spark s1">+</span>
+          <span className="spark s2">✦</span>
+          <div className="success-heart">
+            <Heart size={48} fill="currentColor" />
+            <span>
+              <Check size={18} />
+            </span>
+          </div>
+          <span className="spark s3">✧</span>
+        </div>
+        <span className="eyebrow green">ДЕМООПЛАТА ПРОШЛА</span>
+        <h1>Спасибо доставлено!</h1>
+        <p className="muted">
+          Вы сделали чей-то день лучше.
+          <br />
+          {Object.keys(t.allocations).length
+            ? 'Команда уже видит вашу благодарность.'
+            : 'Менеджер видит чаевые и распределит их команде.'}
+        </p>
+        <div className="success-amount">{money(t.amount)}</div>
+        <div className="receipt-lines">
+          {Object.entries(t.allocations).map(([id, n]) => (
+            <div key={id}>
+              <span>{store.employees.find((e) => e.id === id)?.name}</span>
+              <b>{money(n)}</b>
+            </div>
+          ))}
+          {!Object.keys(t.allocations).length && (
+            <div>
+              <span>Заведению</span>
+              <b>Ожидает распределения</b>
+            </div>
+          )}
+          <div>
+            <span>{store.venue.name}</span>
+            <span>{date(t.date)}</span>
+          </div>
+          <div>
+            <span>Статус</span>
+            <span className="green">
+              {Object.keys(t.allocations).length ? 'Зачислено' : 'Ожидает распределения'}
+            </span>
+          </div>
+        </div>
+        {(t.comment || t.rating > 0 || t.tags.length > 0) && (
+          <div className="thank-note">
+            <MessageSquare size={20} />
+            <div>
+              <b>Ваша благодарность передана</b>
+              {t.rating > 0 && (
+                <small>
+                  {'★'.repeat(t.rating)} · {t.tags.join(', ')}
+                </small>
+              )}
+              {t.comment && <p>«{t.comment}»</p>}
+            </div>
+          </div>
+        )}
+        <div className="outcome-actions">
+          <button
+            className="secondary"
+            onClick={() => {
+              download(
+                `Альфа Чаевые — демо-подтверждение\nОперация ${t.id}\n${date(t.date)}\n${store.venue.name}\nСумма: ${money(t.amount)}\nСпособ: ${t.method}\nКомиссия: 0 ₽\n${Object.entries(
+                  t.allocations,
+                )
+                  .map(
+                    ([id, n]) => `${store.employees.find((e) => e.id === id)?.name}: ${money(n)}`,
+                  )
+                  .join('\n')}\nРеальные деньги не списаны. Не фискальный чек.\n`,
+                'подтверждение-чаевых.txt',
+                'text/plain;charset=utf-8',
+              );
+              notify('Демо-подтверждение сохранено');
+            }}
+          >
+            <Download size={18} /> Сохранить подтверждение
+          </button>
+          <a className="primary" href="/history">
+            Мои благодарности <ArrowRight size={18} />
+          </a>
+          <a className="text-button" href="/">
+            Вернуться в заведение
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
+function download(content: string, name: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function QRDialog({ close, notify }: { close: () => void; notify: (s: string) => void }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    QRCode.toDataURL(location.origin + venueUrl('/'), {
+      width: 300,
+      margin: 2,
+      color: { dark: '#242424', light: '#ffffff' },
+    })
+      .then(setSrc)
+      .catch(() => notify('Не удалось создать QR-код'));
+  }, []);
+  return (
+    <div className="qr-dialog">
+      <h2>Спасибо вашей команде</h2>
+      <p className="muted">Гость сможет разделить чаевые поровну или выбрать вас лично.</p>
+      {src ? (
+        <img width="240" height="240" src={src} alt="QR-код страницы чаевых заведения" />
+      ) : (
+        <p>Создаём QR-код…</p>
+      )}
+      <p className="quiet">
+        Для открытия с телефона устройства должны быть в одной сети, а ссылка — с сетевым адресом
+        компьютера.
+      </p>
+      <button className="primary" onClick={() => copy(location.origin + venueUrl('/'), notify)}>
+        <Copy size={18} /> Скопировать ссылку
+      </button>
+      {src && (
+        <a className="secondary" href={src} download="alfa-tips-qr.png">
+          <Download size={18} /> Скачать QR-код
+        </a>
+      )}
+      <button className="text-button" onClick={close}>
+        Готово
+      </button>
+    </div>
+  );
+}
+type DashboardProps = {
+  path: string;
+  store: Store;
+  update: (fn: (s: Store) => Store, expectedRevision?: number) => Promise<boolean>;
+  notify: (s: string) => void;
+  setModal: (n: React.ReactNode) => void;
+  close: () => void;
+};
+function PageHeading({
+  eyebrow,
+  title,
+  text,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  text?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="page-heading">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+        {text && <p className="muted">{text}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+function Stat({
+  label,
+  value,
+  note,
+  icon,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  icon: React.ReactNode;
+  accent?: boolean;
+}) {
+  return (
+    <div className={`stat card ${accent ? 'accent' : ''}`}>
+      <div className="stat-top">
+        <span>{label}</span>
+        {icon}
+      </div>
+      <strong>{value}</strong>
+      <small>{note}</small>
+    </div>
+  );
+}
+function TipList({
+  tips,
+  store,
+  employee,
+  compact = false,
+}: {
+  tips: Tip[];
+  store: Store;
+  employee?: string;
+  compact?: boolean;
+}) {
+  if (!tips.length)
+    return (
+      <div className="empty">
+        <Wallet size={30} />
+        <h3>Пока нет чаевых</h3>
+        <p>Здесь появятся благодарности гостей за выбранный период.</p>
+      </div>
+    );
+  return (
+    <div className="tip-list">
+      {(compact ? tips.slice(0, 5) : tips).map((t) => (
+        <details className="tip-item" key={t.id}>
+          <summary>
+            <span className="transaction-icon">
+              <Heart size={20} />
+            </span>
+            <span className="tip-main">
+              <b>{t.source === 'guest' ? 'Благодарность гостя' : 'Чаевые от гостя'}</b>
+              <small>
+                {date(t.date)} · {t.method}
+              </small>
+            </span>
+            <span className="tip-value">
+              <b>+{money(employee ? t.allocations[employee] || 0 : t.amount)}</b>
+              <small className={Object.keys(t.allocations).length ? 'green' : 'amber'}>
+                {Object.keys(t.allocations).length ? 'Зачислено' : 'Ждёт распределения'}
+              </small>
+            </span>
+            <ChevronRight size={16} />
+          </summary>
+          <div className="tip-detail">
+            <span className="quiet">Операция {t.id}</span>
+            <div className="receipt-lines">
+              {Object.entries(t.allocations).map(([id, n]) => (
+                <div key={id}>
+                  <span>
+                    {store.employees.find((e) => e.id === id)?.name || 'Удалённый сотрудник'}
+                  </span>
+                  <b>{money(n)}</b>
+                </div>
+              ))}
+            </div>
+            {t.rating > 0 && (
+              <span className="stars">
+                {'★'.repeat(t.rating)}
+                {'☆'.repeat(5 - t.rating)}
+              </span>
+            )}
+            <div className="tags readonly">
+              {t.tags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+            </div>
+            {t.comment && <p>«{t.comment}»</p>}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+function Chart({ tips, employee }: { tips: Tip[]; employee?: string }) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6 + i);
+    const key = d.toDateString();
+    const total = tips
+      .filter((t) => new Date(t.date).toDateString() === key)
+      .reduce((n, t) => n + (employee ? t.allocations[employee] || 0 : t.amount), 0);
+    return { label: d.toLocaleDateString('ru-RU', { weekday: 'short' }), total };
+  });
+  const max = Math.max(...days.map((d) => d.total), 100);
+  return (
+    <div className="chart" aria-label="Чаевые за последние семь дней">
+      {days.map((d, i) => (
+        <div className="chart-column" key={i}>
+          <span className="chart-number">{money(d.total)}</span>
+          <div className="bar-area">
+            <div
+              className={`bar ${i === 6 ? 'today' : ''}`}
+              style={{ height: Math.max(3, (d.total / max) * 100) + '%' }}
+              title={money(d.total)}
+            />
+          </div>
+          <span className={i === 6 ? 'bold' : ''}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function WaiterProfilePicker({
+  store,
+  current,
+  select,
+  close,
+}: {
+  store: Store;
+  current: string;
+  select: (id: string) => void;
+  close: () => void;
+}) {
+  return (
+    <div className="receipt-team-dialog">
+      <span className="developer-label">
+        <Settings size={14} /> Режим разработчика
+      </span>
+      <h2>Открыть профиль сотрудника</h2>
+      <p className="muted">В рабочем приложении сотрудник будет авторизован под своим профилем.</p>
+      <div className="receipt-team-options">
+        {store.employees.map((e) => (
+          <button
+            type="button"
+            key={e.id}
+            aria-pressed={current === e.id}
+            className={current === e.id ? 'selected' : ''}
+            onClick={() => {
+              select(e.id);
+              close();
+            }}
+          >
+            <Avatar employee={e} />
+            <span>
+              <b>{e.name}</b>
+              <small>
+                {e.role}
+                {e.active ? '' : ' · на паузе'}
+              </small>
+            </span>
+            <span className="selection-box">{current === e.id && <Check size={15} />}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function Waiter({
+  path,
+  store,
+  update,
+  notify,
+  setModal,
+  close,
+  qr,
+}: DashboardProps & { qr: () => void }) {
+  const [period, setPeriod] = useState(7),
+    [employeeId, setEmployeeId] = useState(() => {
+      try {
+        return localStorage.getItem('alfa-tips-waiter-id') || 'alex';
+      } catch {
+        return 'alex';
+      }
+    });
+  const employee = store.employees.find((e) => e.id === employeeId) || store.employees[0];
+  useEffect(() => {
+    if (employee)
+      try {
+        localStorage.setItem('alfa-tips-waiter-id', employee.id);
+      } catch {}
+  }, [employee]);
+  if (!employee)
+    return (
+      <Outcome
+        icon={<Users />}
+        title="Команда пока пуста"
+        text="Добавьте сотрудника в кабинете менеджера."
+      >
+        <a href="/manager/team" className="primary">
+          Открыть команду
+        </a>
+      </Outcome>
+    );
+  const all = store.tips.filter((t) => (t.allocations[employee.id] || 0) > 0),
+    filtered = all.filter((t) => inPeriod(t, period));
+  const earned = all.reduce((n, t) => n + (t.allocations[employee.id] || 0), 0),
+    today = all.filter((t) => inPeriod(t, 1)).reduce((n, t) => n + t.allocations[employee.id], 0),
+    reviews = all.filter((t) => t.rating > 0),
+    rating = reviews.length
+      ? (reviews.reduce((n, t) => n + t.rating, 0) / reviews.length).toFixed(1)
+      : '—',
+    target = employee.goalTarget || 5000000,
+    card = employee.cardLast4 || '';
+  const employeeWithdrawals = store.withdrawals.filter(
+    (w) => (w.employeeId || 'alex') === employee.id,
+  );
+  const choose = (id: string) => {
+    setEmployeeId(id);
+    try {
+      localStorage.setItem('alfa-tips-waiter-id', id);
+    } catch {}
+  };
+  const switcher = sessionStorage.getItem('alfa-staff-context') ? null : (
+    <button
+      type="button"
+      className="waiter-profile-switch"
+      onClick={() =>
+        setModal(
+          <WaiterProfilePicker store={store} current={employee.id} select={choose} close={close} />,
+        )
+      }
+    >
+      <Settings size={13} /> Тест: профиль {employee.name}
+    </button>
+  );
+  const withdrawal = () => {
+    const available = balance(store, employee.id);
+    setModal(
+      <>
+        <div className="round-icon">
+          <Wallet />
+        </div>
+        <h2>Перевести на карту</h2>
+        <p className="muted">
+          {card
+            ? `Демонстрационный вывод на карту Альфа-Банка •• ${card}.`
+            : 'Сначала добавьте карту Альфа-Банка в профиле.'}
+        </p>
+        <div className="checkout-amount">{money(available)}</div>
+        <div className="receipt-lines">
+          <div>
+            <span>Комиссия в демо</span>
+            <b>0 ₽</b>
+          </div>
+        </div>
+        <button
+          className="primary"
+          disabled={available <= 0 || !card}
+          onClick={async () => {
+            if (await update((s) => withdraw(s, available, employee.id))) {
+              close();
+              notify('Демовывод выполнен. История обновлена.');
+            }
+          }}
+        >
+          Подтвердить демовывод <ArrowRight size={18} />
+        </button>
+        <p className="quiet centered">Реального перевода на карту не будет</p>
+      </>,
+    );
+  };
+  if (path === '/waiter/profile')
+    return (
+      <>
+        {switcher}
+        <PageHeading
+          eyebrow="ЛИЧНЫЙ КАБИНЕТ"
+          title="Мой профиль"
+          text="Расскажите о себе. Гостям приятно знать, кого они благодарят."
+        />
+        <ProfileForm
+          key={employee.id}
+          store={store}
+          employee={employee}
+          update={update}
+          notify={notify}
+        />
+      </>
+    );
+  if (path === '/waiter/history')
+    return (
+      <>
+        {switcher}
+        <PageHeading
+          eyebrow="ВАШИ БЛАГОДАРНОСТИ"
+          title="История чаевых"
+          action={<Period value={period} onChange={setPeriod} />}
+        />
+        <section className="card padded">
+          <SectionTitle
+            title="Входящие чаевые"
+            extra={<b>{money(filtered.reduce((n, t) => n + t.allocations[employee.id], 0))}</b>}
+          />
+          <TipList tips={filtered} store={store} employee={employee.id} />
+        </section>
+        <section className="card padded">
+          <SectionTitle title="Выводы на карту" />
+          {employeeWithdrawals.length ? (
+            employeeWithdrawals.map((w) => (
+              <div className="withdrawal-row" key={w.id}>
+                <Wallet size={20} />
+                <span>
+                  <b>Карта •• {card || 'не указана'}</b>
+                  <small>{date(w.date)}</small>
+                </span>
+                <b>−{money(w.amount)}</b>
+                <span className="status">Демовывод выполнен</span>
+              </div>
+            ))
+          ) : (
+            <p className="muted">Вы ещё не переводили чаевые на карту.</p>
+          )}
+        </section>
+      </>
+    );
+  if (path !== '/waiter')
+    return (
+      <Outcome icon={<Search />} title="Раздел не найден" text="Вернитесь в кабинет сотрудника.">
+        <a href="/waiter" className="primary">
+          В кабинет
+        </a>
+      </Outcome>
+    );
+  return (
+    <>
+      {switcher}
+      <PageHeading
+        eyebrow="ВАШ ЛИЧНЫЙ КАБИНЕТ"
+        title={`Хорошего дня, ${employee.name}!`}
+        text="Каждое спасибо — за вашу заботу."
+        action={
+          <button className="secondary" onClick={qr}>
+            <QrCode size={18} /> Мой QR-код
+          </button>
+        }
+      />
+      <div className="waiter-top">
+        <div className="balance-card">
+          <div className="balance-label">
+            <Wallet size={19} /> Доступно к выводу{' '}
+          </div>
+          <strong>{money(balance(store, employee.id))}</strong>
+          <div className="balance-bottom">
+            <span>Ваши чаевые уже здесь</span>
+            <button onClick={withdrawal} disabled={balance(store, employee.id) <= 0}>
+              На карту <ArrowRight size={17} />
+            </button>
+          </div>
+          <div className="balance-decoration">а</div>
+        </div>
+        <div className="goal-card card">
+          <div className="section-title">
+            <div className="goal-icon">
+              <Target size={22} />
+            </div>
+            <a href="/waiter/profile" className="text-button">
+              Изменить <ChevronRight size={14} />
+            </a>
+          </div>
+          <small className="muted">МОЯ ЦЕЛЬ</small>
+          <h2>{employeeGoal(store, employee)}</h2>
+          <div className="goal-figures">
+            <b>{money(earned)}</b>
+            <span>из {money(target)}</span>
+          </div>
+          <div className="progress">
+            <span style={{ width: Math.min(100, (earned / target) * 100) + '%' }} />
+          </div>
+          <p className="quiet">
+            {earned >= target
+              ? 'Цель достигнута! Пора выбрать новую мечту.'
+              : `Уже ${Math.floor((earned / target) * 100)}% пути к мечте`}
+          </p>
+        </div>
+      </div>
+      <div className="stats three">
+        <Stat
+          label="Чаевые сегодня"
+          value={money(today)}
+          note="За текущий день"
+          icon={<TrendingUp size={19} />}
+        />
+        <Stat
+          label="Благодарностей"
+          value={String(all.length)}
+          note="За всё время"
+          icon={<Heart size={19} />}
+        />
+        <Stat
+          label="Ваша оценка"
+          value={rating}
+          note={`${reviews.length} оценок гостей`}
+          icon={<Star size={19} />}
+        />
+      </div>
+      <div className="dashboard-columns">
+        <section className="card padded">
+          <SectionTitle
+            title="Последние чаевые"
+            extra={
+              <a className="text-button" href="/waiter/history">
+                Все <ArrowRight size={16} />
+              </a>
+            }
+          />
+          <TipList tips={all} store={store} employee={employee.id} compact />
+        </section>
+        <section className="card padded">
+          <SectionTitle title="Спасибо за заботу" />
+          <div className="review-feed">
+            {all
+              .filter((t) => t.comment)
+              .slice(0, 3)
+              .map((t) => (
+                <div key={t.id}>
+                  <div className="stars">{'★'.repeat(t.rating)}</div>
+                  <p>«{t.comment}»</p>
+                  <small className="quiet">Гость · {date(t.date)}</small>
+                </div>
+              ))}
+          </div>
+        </section>
+      </div>
+      <section className="card padded">
+        <SectionTitle title="Ваша неделя" extra={<span className="quiet">Последние 7 дней</span>} />
+        <Chart tips={all} employee={employee.id} />
+      </section>
+    </>
+  );
+}
+function ProfileForm({
+  store,
+  employee,
+  update,
+  notify,
+}: {
+  store: Store;
+  employee: Employee;
+  update: DashboardProps['update'];
+  notify: DashboardProps['notify'];
+}) {
+  const revision = useRef(store._revision);
+  async function persist(fn: (s: Store) => Store) {
+    const ok = await update(fn, revision.current);
+    if (ok) revision.current = loadStore()._revision;
+    return ok;
+  }
+  const [name, setName] = useState(employee.name),
+    [bio, setBio] = useState(employee.bio),
+    [goal, setGoal] = useState(employeeGoal(store, employee)),
+    [target, setTarget] = useState(String((employee.goalTarget || store.profile.target) / 100)),
+    [card, setCard] = useState(employee.cardLast4 || ''),
+    [notifications, setNotifications] = useState(employee.notifications ?? true);
+  return (
+    <form
+      className="card padded settings-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const n = parseAmount(target);
+        if (n < 10000 || n > 5000000) {
+          notify('Укажите цель от 100 до 50 000 ₽');
+          return;
+        }
+        if (!name.trim() || !bio.trim() || !goal.trim()) {
+          notify('Заполните имя, описание и цель');
+          return;
+        }
+        if (!/^\d{4}$/.test(card)) {
+          notify('Укажите последние 4 цифры карты Альфа-Банка');
+          return;
+        }
+        if (
+          await persist((s) => ({
+            ...s,
+            employees: s.employees.map((e) =>
+              e.id === employee.id
+                ? {
+                    ...e,
+                    name: name.trim(),
+                    bio: bio.trim(),
+                    goal: goal.trim(),
+                    goalTarget: n,
+                    cardLast4: card,
+                    notifications,
+                  }
+                : e,
+            ),
+            profile:
+              employee.id === 'alex' ? { goal: goal.trim(), target: n, notifications } : s.profile,
+          }))
+        )
+          notify('Профиль сохранён — изменения видны гостям');
+      }}
+    >
+      <div className="profile-header">
+        <Avatar employee={employee} large />
+        <div>
+          <h2>{employee.name}</h2>
+          <span className="muted">
+            {employee.role} · {store.venue.name}
+          </span>
+        </div>
+      </div>
+      <label>
+        Имя для гостей
+        <input required maxLength={30} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Пара слов о себе
+        <textarea maxLength={180} required value={bio} onChange={(e) => setBio(e.target.value)} />
+      </label>
+      <label>
+        Карта Альфа-Банка, последние 4 цифры
+        <input
+          required
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={4}
+          placeholder="4242"
+          value={card}
+          onChange={(e) => setCard(e.target.value.replace(/\D/g, '').slice(0, 4))}
+        />
+      </label>
+      <div className="divider" />
+      <h2>На что копите?</h2>
+      <label>
+        Название цели
+        <input required maxLength={60} value={goal} onChange={(e) => setGoal(e.target.value)} />
+      </label>
+      <label>
+        Сумма цели, ₽
+        <input
+          required
+          inputMode="decimal"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+        />
+      </label>
+      <label className="checkbox-line">
+        <input
+          type="checkbox"
+          checked={notifications}
+          onChange={(e) => setNotifications(e.target.checked)}
+        />
+        <span>Показывать уведомления о новых чаевых в кабинете</span>
+      </label>
+      <p className="quiet">
+        Настройка сохраняется в демо. Push и SMS подключаются на стороне сервера.
+      </p>
+      <button className="primary">
+        Сохранить изменения <Check size={18} />
+      </button>
+    </form>
+  );
+}
+function Period({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <label className="period">
+      <CalendarDays size={17} />
+      <select aria-label="Период" value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        <option value={1}>Сегодня</option>
+        <option value={7}>Последние 7 дней</option>
+        <option value={30}>Последние 30 дней</option>
+      </select>
+    </label>
+  );
+}
+function Manager({ path, store, update, notify, setModal, close }: DashboardProps) {
+  const [period, setPeriod] = useState(7),
+    [search, setSearch] = useState(''),
+    [reviewFilter, setReviewFilter] = useState('all'),
+    [statusFilter, setStatusFilter] = useState('all'),
+    [teamRole, setTeamRole] = useState('all'),
+    [teamSort, setTeamSort] = useState('role');
+  const tips = store.tips.filter((t) => inPeriod(t, period));
+  const total = tips.reduce((n, t) => n + t.amount, 0);
+  const rated = tips.filter((t) => t.rating > 0);
+  const avgRating = rated.length
+    ? (rated.reduce((n, t) => n + t.rating, 0) / rated.length).toFixed(1)
+    : '—';
+  const pool = store.tips
+    .filter((t) => !Object.keys(t.allocations).length)
+    .reduce((n, t) => n + t.amount, 0);
+  function exportCSV() {
+    const rows = [
+      ['Операция', 'Дата', 'Сумма ₽', 'Получатели', 'Статус', 'Оценка', 'Отзыв'],
+      ...visible.map((t) => [
+        t.id,
+        date(t.date),
+        t.amount / 100,
+        Object.entries(t.allocations)
+          .map(([id, n]) => `${store.employees.find((e) => e.id === id)?.name || id}: ${money(n)}`)
+          .join('; '),
+        Object.keys(t.allocations).length ? 'Зачислено' : 'Ожидает распределения',
+        t.rating || '',
+        t.comment,
+      ]),
+    ];
+    download(
+      '\uFEFF' + rows.map((row) => row.map(csvCell).join(';')).join('\r\n'),
+      'чаевые.csv',
+      'text/csv;charset=utf-8',
+    );
+    notify('Отчёт CSV сохранён');
+  }
+  const visible = tips
+    .filter(
+      (t) =>
+        statusFilter === 'all' ||
+        (statusFilter === 'allocated'
+          ? Object.keys(t.allocations).length > 0
+          : Object.keys(t.allocations).length === 0),
+    )
+    .filter((t) =>
+      [
+        t.id,
+        t.comment,
+        ...Object.keys(t.allocations).map(
+          (id) => store.employees.find((e) => e.id === id)?.name || '',
+        ),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+    );
+  const roles = Array.from(new Set(store.employees.map((e) => e.role))).sort((a, b) =>
+    a.localeCompare(b, 'ru'),
+  );
+  const team = store.employees
+    .filter((e) => teamRole === 'all' || e.role === teamRole)
+    .sort((a, b) =>
+      teamSort === 'name'
+        ? a.name.localeCompare(b.name, 'ru')
+        : teamSort === 'status'
+          ? Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'ru')
+          : a.role.localeCompare(b.role, 'ru') || a.name.localeCompare(b.name, 'ru'),
+    );
+  function distribute() {
+    setModal(
+      <>
+        <div className="round-icon">
+          <Users />
+        </div>
+        <h2>Распределить чаевые</h2>
+        <p className="muted">
+          Все нераспределённые чаевые заведения — {money(pool)} — будут зачислены по текущему
+          правилу.
+        </p>
+        <div className="receipt-lines">
+          {venueRule(store).ids.map((id, i) => (
+            <div key={id}>
+              <span>{store.employees.find((e) => e.id === id)?.name}</span>
+              <b>{displayedShare(venueRule(store).shares[i])}%</b>
+            </div>
+          ))}
+        </div>
+        <button
+          className="primary"
+          onClick={async () => {
+            if (await update(distributePool)) {
+              close();
+              notify('Чаевые распределены. Кабинет сотрудника обновлён.');
+            }
+          }}
+        >
+          Распределить {money(pool)} <Check size={18} />
+        </button>
+        <p className="quiet centered">Сумма сохраняется с точностью до копейки</p>
+      </>,
+    );
+  }
+  function askDelete(employee: Employee) {
+    setModal(
+      <div className="delete-employee-dialog">
+        <div className="round-icon danger-icon">
+          <UserRound />
+        </div>
+        <h2>Удалить {employee.name}?</h2>
+        <p className="muted">
+          Сотрудник исчезнет из команды и выбора для новых чаевых. Уже полученные чаевые останутся в
+          истории.
+        </p>
+        <button
+          className="danger-button"
+          onClick={async () => {
+            if (
+              await update((s) => {
+                const employees = s.employees.filter((e) => e.id !== employee.id),
+                  ids = employees.filter((e) => e.active).map((e) => e.id);
+                return {
+                  ...s,
+                  employees,
+                  settings: { recipientIds: ids, shares: equalShares(ids) },
+                };
+              })
+            ) {
+              close();
+              notify('Сотрудник удалён из команды');
+            }
+          }}
+        >
+          <X size={18} /> Удалить сотрудника
+        </button>
+        <button className="secondary" onClick={close}>
+          Отмена
+        </button>
+      </div>,
+    );
+  }
+  if (path === '/manager/access') return <ManagementAccess store={store} />;
+  if (path === '/manager/audit') return <AuditLog />;
+  if (path === '/manager/settings')
+    return (
+      <>
+        <PageHeading
+          eyebrow="КАБИНЕТ ЗАВЕДЕНИЯ"
+          title="Настройки заведения"
+          text="Информация и правила, которые увидят ваши гости."
+        />
+        <VenueForm store={store} update={update} notify={notify} />
+        <DistributionSettings store={store} update={update} notify={notify} />
+      </>
+    );
+  if (path === '/manager/team')
+    return (
+      <>
+        <PageHeading
+          eyebrow="ЛЮДИ, КОТОРЫЕ СОЗДАЮТ АТМОСФЕРУ"
+          title="Ваша команда"
+          text={`${store.employees.filter((e) => e.active).length} сотрудников принимают благодарности`}
+          action={
+            <button
+              className="primary compact"
+              onClick={() =>
+                setModal(
+                  <EmployeeForm
+                    baseRevision={store._revision}
+                    update={update}
+                    notify={notify}
+                    close={close}
+                  />,
+                )
+              }
+            >
+              <Plus size={18} /> Добавить сотрудника
+            </button>
+          }
+        />
+        <div className="team-controls card">
+          <label>
+            Показать тип
+            <select
+              aria-label="Фильтр по типу занятости"
+              value={teamRole}
+              onChange={(e) => setTeamRole(e.target.value)}
+            >
+              <option value="all">Все типы</option>
+              {roles.map((role) => (
+                <option key={role}>{role}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Сортировка
+            <select
+              aria-label="Сортировка команды"
+              value={teamSort}
+              onChange={(e) => setTeamSort(e.target.value)}
+            >
+              <option value="role">По типу занятости</option>
+              <option value="name">По имени</option>
+              <option value="status">По статусу</option>
+            </select>
+          </label>
+        </div>
+        <div className="team-grid">
+          {team.map((e) => {
+            const amount = store.tips.reduce((n, t) => n + (t.allocations[e.id] || 0), 0);
+            return (
+              <article className="card employee-card" key={e.id}>
+                <div className="row-between">
+                  <Avatar employee={e} large />
+                  <span className={`status ${e.active ? '' : 'inactive'}`}>
+                    {e.active ? 'Принимает чаевые' : 'На паузе'}
+                  </span>
+                </div>
+                <h2>{e.name}</h2>
+                <p className="muted">{e.role}</p>
+                <p className="employee-card-number">
+                  <CreditCard size={15} />
+                  {e.cardLast4 ? `Карта Альфа-Банка •• ${e.cardLast4}` : 'Карта не указана'}
+                </p>
+                <div className="employee-income">
+                  <small>Всего чаевых</small>
+                  <b>{money(amount)}</b>
+                </div>
+                <p className="employee-bio">{e.bio || 'Описание пока не добавлено'}</p>
+                <div className="employee-actions">
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      setModal(
+                        <EmployeeForm
+                          baseRevision={store._revision}
+                          employee={e}
+                          update={update}
+                          notify={notify}
+                          close={close}
+                        />,
+                      )
+                    }
+                  >
+                    <Settings size={16} /> Изменить
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={async () => {
+                      if (
+                        await update((s) => ({
+                          ...s,
+                          employees: s.employees.map((x) =>
+                            x.id === e.id ? { ...x, active: !x.active } : x,
+                          ),
+                        }))
+                      )
+                        notify(
+                          e.active
+                            ? 'Приём чаевых приостановлен'
+                            : 'Сотрудник снова принимает чаевые',
+                        );
+                    }}
+                  >
+                    {e.active ? 'Приостановить приём' : 'Включить приём'}
+                  </button>
+                  <button
+                    className="delete-employee"
+                    aria-label={`Удалить сотрудника ${e.name}`}
+                    onClick={() => askDelete(e)}
+                  >
+                    <X size={17} /> Удалить
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {!team.length && (
+          <div className="empty card">
+            <Users />
+            <h3>Нет сотрудников этого типа</h3>
+            <p>Выберите другой фильтр или добавьте нового сотрудника.</p>
+          </div>
+        )}
+        <div className="info-box">
+          <Info size={20} />
+          <span>
+            Сотрудники на паузе не показываются в выборе для новых чаевых. Изменения команды сразу
+            доступны на странице оплаты.
+          </span>
+        </div>
+      </>
+    );
+  if (path === '/manager/reviews') {
+    const reviews = tips
+      .filter((t) => t.rating || t.comment || t.tags.length)
+      .filter(
+        (t) =>
+          reviewFilter === 'all' ||
+          (reviewFilter === 'new' ? !t.reviewed : !!t.rating && t.rating <= 3),
+      );
+    return (
+      <>
+        <PageHeading
+          eyebrow="ГОЛОС ВАШИХ ГОСТЕЙ"
+          title="Отзывы и благодарности"
+          text="Что радует гостей и что можно сделать лучше."
+          action={<Period value={period} onChange={setPeriod} />}
+        />
+        <div className="review-overview card">
+          <div>
+            <strong>{avgRating}</strong>
+            <span className="stars">★</span>
+            <p className="muted">Средняя оценка · {rated.length} оценок</p>
+          </div>
+          <div className="tags readonly">
+            {tagOptions.map((tag) => {
+              const count = tips.filter((t) => t.tags.includes(tag)).length;
+              return (
+                <span key={tag}>
+                  {tag} <b>{count}</b>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+        <div className="filter-tabs">
+          {[
+            ['all', 'Все отзывы'],
+            ['new', 'Непрочитанные'],
+            ['low', 'Нужны улучшения'],
+          ].map(([v, l]) => (
+            <button
+              className={reviewFilter === v ? 'active' : ''}
+              key={v}
+              onClick={() => setReviewFilter(v)}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        <div className="reviews-grid">
+          {reviews.length ? (
+            reviews.map((t) => (
+              <article className="card review-card" key={t.id}>
+                <div className="row-between">
+                  <div className="review-author">
+                    <span className="anonymous">
+                      <UserRound size={20} />
+                    </span>
+                    <div>
+                      <b>Гость заведения</b>
+                      <small>{date(t.date)}</small>
+                    </div>
+                  </div>
+                  {!t.reviewed && <span className="new-dot" title="Непрочитанный" />}
+                </div>
+                {t.rating > 0 && (
+                  <p className="stars">
+                    {'★'.repeat(t.rating)}
+                    {'☆'.repeat(5 - t.rating)}
+                  </p>
+                )}
+                <p>{t.comment || 'Гость оставил оценку без комментария'}</p>
+                <div className="tags readonly">
+                  {t.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+                <div className="review-footer">
+                  <span>
+                    {money(t.amount)} ·{' '}
+                    {Object.keys(t.allocations)
+                      .map((id) => store.employees.find((e) => e.id === id)?.name)
+                      .join(', ') || 'Заведению'}
+                  </span>
+                  <button
+                    className="text-button"
+                    disabled={t.reviewed}
+                    onClick={async () => {
+                      if (
+                        await update((s) => ({
+                          ...s,
+                          tips: s.tips.map((x) => (x.id === t.id ? { ...x, reviewed: true } : x)),
+                        }))
+                      )
+                        notify('Отзыв отмечен прочитанным');
+                    }}
+                  >
+                    <CheckCheck size={16} />
+                    {t.reviewed ? 'Прочитано' : 'Отметить прочитанным'}
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="empty">
+              <MessageSquare />
+              <h3>Таких отзывов пока нет</h3>
+              <p>Выберите другой фильтр или период.</p>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+  if (path === '/manager/tips')
+    return (
+      <>
+        <PageHeading
+          eyebrow="ВСЯ БЛАГОДАРНОСТЬ В ОДНОМ МЕСТЕ"
+          title="Все чаевые"
+          action={
+            <button className="secondary" onClick={exportCSV}>
+              <Download size={18} /> Скачать CSV
+            </button>
+          }
+        />
+        <section className="card padded">
+          <div className="filters">
+            <label className="search">
+              <Search size={18} />
+              <input
+                placeholder="Имя, отзыв или номер операции"
+                aria-label="Поиск чаевых"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            <Period value={period} onChange={setPeriod} />
+            <select
+              className="tip-status-filter"
+              aria-label="Статус чаевых"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">Все статусы</option>
+              <option value="allocated">Зачислено</option>
+              <option value="pending">Ожидает распределения</option>
+            </select>
+          </div>
+          <div className="section-title">
+            <span className="muted">Найдено операций: {visible.length}</span>
+            <b>{money(visible.reduce((n, t) => n + t.amount, 0))}</b>
+          </div>
+          <TipList tips={visible} store={store} />
+        </section>
+      </>
+    );
+  if (path !== '/manager/statistics')
+    return (
+      <Outcome icon={<Search />} title="Раздел не найден" text="Вернитесь в кабинет заведения.">
+        <a href="/manager" className="primary">
+          В кабинет
+        </a>
+      </Outcome>
+    );
+  return (
+    <>
+      {pool > 0 && (
+        <div className="pool-banner">
+          <div>
+            <b>Ожидают распределения: {money(pool)}</b>
+            <p>Эти чаевые пока не зачислены сотрудникам.</p>
+          </div>
+          <button onClick={distribute}>
+            Распределить <ArrowRight size={16} />
+          </button>
+        </div>
+      )}
+      <PageHeading
+        eyebrow="АЛЬФА ЧАЕВЫЕ · ЗАВЕДЕНИЕ"
+        title="Статистика чаевых"
+        text={`${store.venue.name} · ${store.venue.address}`}
+        action={<Period value={period} onChange={setPeriod} />}
+      />
+      <div className="stats three">
+        <Stat
+          accent
+          label="Всего чаевых"
+          value={money(total)}
+          note="За выбранный период"
+          icon={<Wallet size={19} />}
+        />
+        <Stat
+          label="Средние чаевые"
+          value={money(tips.length ? Math.round(total / tips.length) : 0)}
+          note={`${tips.length} благодарностей гостей`}
+          icon={<TrendingUp size={19} />}
+        />
+        <Stat
+          label="Оценка гостей"
+          value={avgRating}
+          note={`${rated.length} оценок за период`}
+          icon={<Star size={19} />}
+        />
+      </div>
+      <div className="manager-middle">
+        <section className="card padded">
+          <SectionTitle
+            title="Чаевые за неделю"
+            extra={<span className="quiet">Последние 7 дней</span>}
+          />
+          <Chart tips={store.tips} />
+        </section>
+        <section className="card padded">
+          <SectionTitle title="За что говорят спасибо" />
+          <div className="tag-chart">
+            {tagOptions.map((tag) => {
+              const count = tips.filter((t) => t.tags.includes(tag)).length;
+              return (
+                <div key={tag}>
+                  <div>
+                    <span>{tag}</span>
+                    <b>{count}</b>
+                  </div>
+                  <div className="progress">
+                    <span
+                      style={{ width: tips.length ? (count / tips.length) * 100 + '%' : '0%' }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+      <div className="dashboard-columns">
+        <section className="card padded">
+          <SectionTitle
+            title="Последние благодарности"
+            extra={
+              <a className="text-button" href="/manager/tips">
+                Все <ArrowRight size={16} />
+              </a>
+            }
+          />
+          <TipList tips={tips} store={store} compact />
+        </section>
+        <section className="card padded">
+          <SectionTitle
+            title="Ваша команда"
+            extra={
+              <a className="text-button" href="/manager/team">
+                Открыть <ArrowRight size={16} />
+              </a>
+            }
+          />
+          <div className="team-ranking">
+            {store.employees.map((e) => (
+              <div key={e.id}>
+                <Avatar employee={e} />
+                <span>
+                  <b>{e.name}</b>
+                  <small>{e.role}</small>
+                </span>
+                <b>{money(tips.reduce((n, t) => n + (t.allocations[e.id] || 0), 0))}</b>
+              </div>
+            ))}
+          </div>
+          <p className="quiet">Суммы отражают долю каждого сотрудника.</p>
+        </section>
+      </div>
+    </>
+  );
+}
+function EmployeeForm({
+  employee,
+  update,
+  notify,
+  close,
+  baseRevision,
+}: {
+  baseRevision?: number;
+  employee?: Employee;
+  update: DashboardProps['update'];
+  notify: DashboardProps['notify'];
+  close: () => void;
+}) {
+  const revision = useRef(baseRevision);
+  async function persist(fn: (s: Store) => Store) {
+    const ok = await update(fn, revision.current);
+    if (ok) revision.current = loadStore()._revision;
+    return ok;
+  }
+  const [name, setName] = useState(employee?.name || ''),
+    [role, setRole] = useState(employee?.role || 'Официант'),
+    [card, setCard] = useState(employee?.cardLast4 || '');
+  const editing = !!employee;
+  return (
+    <form
+      className="settings-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!name.trim() || !role.trim()) {
+          notify('Введите имя и тип занятости');
+          return;
+        }
+        if (!/^\d{4}$/.test(card)) {
+          notify('Укажите последние 4 цифры карты Альфа-Банка');
+          return;
+        }
+        const initials = name
+          .trim()
+          .split(' ')
+          .map((x) => x[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        if (
+          await persist((s) => ({
+            ...s,
+            employees: editing
+              ? s.employees.map((x) =>
+                  x.id === employee.id
+                    ? { ...x, name: name.trim(), role: role.trim(), initials, cardLast4: card }
+                    : x,
+                )
+              : [
+                  ...s.employees,
+                  {
+                    id: createId(),
+                    name: name.trim(),
+                    role: role.trim(),
+                    initials,
+                    active: true,
+                    color: 'sage',
+                    bio: '',
+                    goal: 'Цель пока не указана',
+                    goalTarget: 5000000,
+                    cardLast4: card,
+                    notifications: true,
+                  },
+                ],
+          }))
+        ) {
+          close();
+          notify(
+            editing
+              ? 'Данные сотрудника обновлены'
+              : 'Сотрудник добавлен и доступен для привязки к чеку',
+          );
+        }
+      }}
+    >
+      <h2>{editing ? 'Изменить сотрудника' : 'Новый сотрудник'}</h2>
+      <p className="muted">
+        {editing
+          ? 'Обновите данные, которые использует заведение. Личную цель сотрудник меняет сам.'
+          : 'Добавьте человека в команду заведения. Цель он заполнит самостоятельно в своём профиле.'}
+      </p>
+      <label>
+        Имя
+        <input
+          autoFocus
+          required
+          maxLength={30}
+          placeholder="Например, Анна"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <label>
+        Тип занятости
+        <input
+          required
+          list="employee-role-options"
+          maxLength={40}
+          placeholder="Например, парикмахер"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+        />
+        <datalist id="employee-role-options">
+          <option value="Официант" />
+          <option value="Повар" />
+          <option value="Бармен" />
+          <option value="Бариста" />
+          <option value="Хостес" />
+          <option value="Парикмахер" />
+          <option value="Мастер" />
+          <option value="Администратор" />
+        </datalist>
+      </label>
+      <label>
+        Карта Альфа-Банка, последние 4 цифры
+        <input
+          required
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={4}
+          placeholder="4242"
+          value={card}
+          onChange={(e) => setCard(e.target.value.replace(/\D/g, '').slice(0, 4))}
+        />
+      </label>
+      <button className="primary">
+        {editing ? 'Сохранить изменения' : 'Добавить в команду'}{' '}
+        {editing ? <Check size={18} /> : <Plus size={18} />}
+      </button>
+    </form>
+  );
+}
+function VenueForm({
+  store,
+  update,
+  notify,
+}: {
+  store: Store;
+  update: DashboardProps['update'];
+  notify: DashboardProps['notify'];
+}) {
+  const revision = useRef(store._revision);
+  async function persist(fn: (s: Store) => Store) {
+    const ok = await update(fn, revision.current);
+    if (ok) revision.current = loadStore()._revision;
+    return ok;
+  }
+  const [name, setName] = useState(store.venue.name),
+    [address, setAddress] = useState(store.venue.address),
+    [mapUrl, setMapUrl] = useState(safeMapUrl(store.venue.mapUrl, store.venue.address)),
+    [bill, setBill] = useState(String(store.venue.bill / 100));
+  return (
+    <form
+      className="card padded settings-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!name.trim() || !address.trim()) {
+          notify('Укажите название и адрес');
+          return;
+        }
+        try {
+          const url = new URL(mapUrl);
+          if (!['https:', 'http:'].includes(url.protocol)) throw new Error();
+        } catch {
+          notify('Укажите ссылку на карту, начинающуюся с https:// или http://');
+          return;
+        }
+        const amount = parseAmount(bill);
+        if (amount <= 0) {
+          notify('Укажите положительную сумму счёта');
+          return;
+        }
+        if (
+          await persist((s) => ({
+            ...s,
+            venue: {
+              ...s.venue,
+              name: name.trim(),
+              address: address.trim(),
+              bill: amount,
+              mapUrl: mapUrl.trim(),
+            },
+          }))
+        )
+          notify('Настройки сохранены. Новый гость увидит изменения.');
+      }}
+    >
+      <h2>Информация для гостя</h2>
+      <label>
+        Название заведения
+        <input required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Адрес
+        <input
+          required
+          maxLength={120}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+      </label>
+      <label>
+        Ссылка на карту
+        <input
+          type="url"
+          required
+          maxLength={2000}
+          value={mapUrl}
+          onChange={(e) => setMapUrl(e.target.value)}
+          placeholder="https://www.google.com/maps/…"
+        />
+      </label>
+      <p className="quiet">
+        Гость откроет эту ссылку нажатием на адрес. Можно указать Google Карты, Яндекс Карты или
+        другой картографический сервис.
+      </p>
+      <label>
+        Сумма демонстрационного счёта, ₽
+        <input
+          required
+          inputMode="decimal"
+          value={bill}
+          onChange={(e) => setBill(e.target.value)}
+        />
+      </label>
+      <button className="primary">
+        Сохранить настройки <Check size={18} />
+      </button>
+    </form>
+  );
+}
+export class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: boolean }
+> {
+  state = { error: false };
+  static getDerivedStateFromError() {
+    return { error: true };
+  }
+  render() {
+    return this.state.error ? (
+      <main className="narrow">
+        <div className="card padded">
+          <h1>Не удалось открыть демо</h1>
+          <p>
+            Произошла ошибка при загрузке страницы. Попробуйте обновить её — сохранённые данные
+            останутся в браузере.
+          </p>
+          <button className="primary" onClick={() => location.reload()}>
+            Обновить страницу
+          </button>
+          <button
+            className="secondary"
+            onClick={() => {
+              try {
+                download(
+                  localStorage.getItem('alfa-tips-demo-v1') || '{}',
+                  'alfa-tips-backup.json',
+                  'application/json',
+                );
+              } catch {
+                alert('Хранилище браузера недоступно');
+              }
+            }}
+          >
+            Скачать сохранённые данные
+          </button>
+          <button
+            className="primary"
+            onClick={() => {
+              try {
+                localStorage.removeItem('alfa-tips-demo-v1');
+                localStorage.removeItem('alfa-tips-draft-v3');
+                sessionStorage.removeItem('tip-draft');
+                location.href = '/';
+              } catch {
+                alert('Разрешите локальное хранилище браузера');
+              }
+            }}
+          >
+            Начать демо заново
+          </button>
+        </div>
+      </main>
+    ) : (
+      this.props.children
+    );
+  }
+}
 export default App;
+
+function Rewards({ store }: { store: Store }) {
+  const level = orangeLevel(store.oranges.balance),
+    progress = Math.min(
+      100,
+      level.next === store.oranges.balance ? 100 : (store.oranges.balance / level.next) * 100,
+    );
+  return (
+    <main className="rewards-page">
+      <a className="back" href="/">
+        <ArrowLeft size={18} /> К чаевым
+      </a>
+      <section className="rewards-hero">
+        <span className="rewards-kicker">БОНУСЫ ЗА БЛАГОДАРНОСТЬ · ДЕМО</span>
+        <h1>Бонусы</h1>
+        <p>
+          Небольшой знак за оставленные чаевые. За каждые полные 100 ₽ начисляется 1 бонус, а с Alfa
+          Pay — 2.
+        </p>
+        <div className="rewards-balance">
+          {store.oranges.balance} <span>бонусов</span>
+        </div>
+      </section>
+      <div className="rewards-grid">
+        <section className="rewards-card">
+          <h2>{level.name}</h2>
+          <p>
+            {level.next === store.oranges.balance
+              ? 'Максимальный демо-уровень достигнут.'
+              : 'До следующего уровня — ' +
+                Math.max(0, level.next - store.oranges.balance) +
+                ' бонусов.'}
+          </p>
+          <div className="reward-progress">
+            <span style={{ width: progress + '%' }} />
+          </div>
+          <small>
+            {store.oranges.balance} / {level.next}
+          </small>
+        </section>
+        <section className="rewards-card">
+          <h2>Как получить больше</h2>
+          <p>
+            Оставляйте чаевые любым способом. Войдите с Alfa ID и выберите Alfa Pay, чтобы удвоить
+            начисление. Бонусы не являются деньгами или банковской программой.
+          </p>
+        </section>
+      </div>
+      <section className="rewards-card rewards-events">
+        <h2>История начислений</h2>
+        {store.oranges.events.length ? (
+          store.oranges.events.slice(0, 12).map((event) => (
+            <div className="orange-event" key={event.tipId}>
+              <span>
+                <Gift size={18} />
+              </span>
+              <span>
+                <b>Чаевые · {isAlfaPay(event.method) ? 'Alfa Pay' : event.method}</b>
+                <small>{date(event.date)}</small>
+              </span>
+              <strong>+{event.amount}</strong>
+            </div>
+          ))
+        ) : (
+          <p>Оставьте первые чаевые — здесь появятся бонусы.</p>
+        )}
+      </section>
+    </main>
+  );
+}

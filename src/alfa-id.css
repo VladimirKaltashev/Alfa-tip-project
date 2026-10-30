@@ -1,0 +1,227 @@
+.alfa-id-page {
+  min-height: 100dvh;
+  background: #f0f1f5;
+  color: #202026;
+  padding: 26px clamp(22px, 6vw, 76px);
+  display: grid;
+  grid-template-columns: minmax(280px, 510px) minmax(240px, 360px);
+  grid-template-rows: auto 1fr;
+  gap: clamp(40px, 8vw, 150px);
+  align-items: start;
+}
+.alfa-id-header {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.alfa-id-header > a {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: 50%;
+  color: #25252b;
+}
+.alfa-id-logo {
+  font-size: 35px;
+  font-weight: 900;
+  line-height: 0.8;
+  color: #ef3124;
+  position: relative;
+  letter-spacing: -0.14em;
+}
+.alfa-id-logo i {
+  display: block;
+  width: 25px;
+  height: 4px;
+  background: currentColor;
+  margin: 4px 0 0 3px;
+}
+.alfa-id-demo {
+  margin-left: auto;
+  border: 1px solid #d7d8de;
+  border-radius: 99px;
+  padding: 8px 12px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #797982;
+}
+.alfa-id-card {
+  width: 100%;
+  justify-self: end;
+  background: #fff;
+  border-radius: 30px;
+  padding: clamp(28px, 4vw, 48px);
+  box-shadow: 0 20px 50px #25263310;
+}
+.alfa-id-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #777780;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.alfa-id-kicker svg {
+  color: #ef3124;
+}
+.alfa-id-card h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  letter-spacing: -0.06em;
+  line-height: 1.03;
+  margin: 20px 0 14px;
+}
+.alfa-id-card > p {
+  font-size: 15px;
+  color: #6d6d76;
+  line-height: 1.55;
+  margin-bottom: 28px;
+}
+.alfa-phone,
+.alfa-code {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #71717a;
+  font-size: 13px;
+}
+.alfa-phone > div {
+  min-height: 72px;
+  background: #f0f1f4;
+  border-radius: 16px;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alfa-phone b {
+  font-size: 19px;
+}
+.alfa-phone strong {
+  font-size: 17px;
+  color: #25252b;
+}
+.alfa-phone input {
+  border: 0;
+  background: transparent;
+  outline: 0;
+  min-width: 0;
+  flex: 1;
+  font-size: 17px;
+  color: #25252b;
+}
+.alfa-phone input::placeholder,
+.alfa-code input::placeholder {
+  color: #a3a4ac;
+}
+.alfa-code input {
+  width: 100%;
+  letter-spacing: 0.3em;
+  text-align: center;
+  border: 0;
+  background: #f0f1f4;
+  border-radius: 16px;
+  min-height: 72px;
+  font-size: 26px;
+  outline: 0;
+}
+.alfa-id-primary {
+  width: 100%;
+  min-height: 58px;
+  border-radius: 16px;
+  background: #242429;
+  color: #fff;
+  font-weight: 750;
+  font-size: 16px;
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.alfa-id-primary:hover {
+  background: #393940;
+}
+.alfa-id-link {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  color: #292930;
+  font-size: 14px;
+  font-weight: 650;
+}
+.alfa-id-error {
+  color: #cc3027 !important;
+  margin: 10px 0 -8px !important;
+  font-size: 13px !important;
+}
+.alfa-id-note {
+  display: flex;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 19px;
+  border-top: 1px solid #eeeef2;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #85858e;
+}
+.alfa-id-note svg {
+  color: #ef3124;
+  flex: none;
+}
+.alfa-id-benefits {
+  align-self: center;
+  background: #ef3124;
+  color: #fff;
+  border-radius: 28px;
+  padding: 28px;
+  display: flex;
+  gap: 15px;
+  box-shadow: 0 20px 40px #ef312430;
+}
+.alfa-id-benefits svg {
+  flex: none;
+}
+.alfa-id-benefits div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.alfa-id-benefits b {
+  font-size: 17px;
+}
+.alfa-id-benefits span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #fff7f6;
+}
+@media (max-width: 760px) {
+  .alfa-id-page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 18px 16px 34px;
+  }
+  .alfa-id-header {
+    width: 100%;
+  }
+  .alfa-id-card {
+    padding: 28px 22px;
+    border-radius: 24px;
+  }
+  .alfa-id-card h1 {
+    font-size: 35px;
+  }
+  .alfa-id-benefits {
+    width: 100%;
+    border-radius: 22px;
+    padding: 20px;
+  }
+  .alfa-id-demo {
+    font-size: 8px;
+  }
+}

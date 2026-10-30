@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - run: python -m unittest discover -s backend -t .
+
+  container:
+    name: Build and smoke-test containers
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    timeout-minutes: 15
+    env:
+      ALFA_HTTP_PORT: '8080'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and start the complete application
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - name: Verify frontend, API proxy and access boundary
+        shell: bash
+        run: |
+          curl --fail --max-time 10 http://localhost:8080/healthz
+          curl --fail --max-time 10 http://localhost:8080/api/health
+          curl --fail --max-time 10 http://localhost:8080/manager | grep -q 'id="root"'
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:8080/api/store)
+          test "$status" = '401'
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 150
+      - name: Clean up the ephemeral CI environment
+        if: always()
+        run: docker compose down --volumes
+
+  deploy:
+    name: Deploy to configured server
+    runs-on: ubuntu-latest
+    needs: container
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Update application over SSH
+        if: env.DEPLOY_HOST != '' && env.DEPLOY_USER != '' && env.DEPLOY_SSH_KEY != '' && env.DEPLOY_PATH != ''
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git pull --ff-only
+            docker compose up -d --build

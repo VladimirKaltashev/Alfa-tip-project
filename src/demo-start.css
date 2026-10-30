@@ -1,0 +1,96 @@
+.demo-start {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 24px;
+  display: grid;
+  gap: 28px;
+}
+.demo-start header {
+  max-width: 760px;
+}
+.demo-start h1 {
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.15;
+  margin: 14px 0 20px;
+}
+.demo-start p {
+  color: #585860;
+  line-height: 1.6;
+}
+.demo-roles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.demo-roles article {
+  background: #fff;
+  border: 1px solid #e9e9eb;
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.demo-roles article > svg {
+  width: 32px;
+  height: 32px;
+  color: #ef3124;
+}
+.demo-roles h2,
+.demo-roles p {
+  margin: 0;
+}
+.demo-roles p {
+  flex: 1;
+}
+.demo-roles .primary {
+  width: 100%;
+  white-space: normal;
+  text-align: center;
+  min-height: 56px;
+}
+.demo-roles small {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64646c;
+}
+.demo-start footer {
+  font-size: 14px;
+}
+.demo-start footer a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.staff-demo-entry {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #dedee4;
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+}
+.staff-password {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.staff-password input {
+  min-width: 0;
+}
+.staff-password button {
+  min-height: 44px;
+  padding: 8px;
+  white-space: nowrap;
+}
+@media (max-width: 850px) {
+  .demo-roles {
+    grid-template-columns: 1fr;
+  }
+  .demo-start {
+    padding: 28px 18px;
+  }
+  .demo-roles article {
+    padding: 22px;
+  }
+}

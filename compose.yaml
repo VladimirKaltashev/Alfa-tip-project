@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "${ALFA_HTTP_PORT:-80}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      target: backend
+    restart: unless-stopped
+    environment:
+      ALFA_TIPS_DB: /data/alfa-tips.sqlite3
+      ALFA_COOKIE_SECURE: ${ALFA_COOKIE_SECURE:-0}
+    volumes:
+      - alfa-tips-data:/data
+
+volumes:
+  alfa-tips-data:
+
