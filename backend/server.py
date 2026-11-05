@@ -357,7 +357,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             if store is None:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "Состояние ещё не создано"})
             else:
-                self.send_json(HTTPStatus.OK, {"venue": security.public_venue(store["venue"]), "employees": [security.public_employee(item) for item in store['employees'] if item['active']]})
+                self.send_json(HTTPStatus.OK, {"venue": security.public_venue(store["venue"]), "employees": [security.public_employee(item, store['profile']) for item in store['employees'] if item['active']]})
             return
         if path.startswith("/api/payments/"):
             payment_id = path.rsplit("/", 1)[-1]
