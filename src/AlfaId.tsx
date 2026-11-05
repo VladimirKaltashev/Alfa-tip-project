@@ -8,6 +8,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { requestAlfaIdCode, verifyAlfaId } from './repository';
+import { venueUrl } from './tenant';
 import './alfa-id.css';
 
 export type AlfaIdentity = {
@@ -38,12 +39,14 @@ export function clearAlfaIdentity() {
 function returnPath() {
   try {
     const value = new URL(
-      new URLSearchParams(location.search).get('return') || '/',
+      new URLSearchParams(location.search).get('return') || venueUrl('/'),
       location.origin,
     );
-    return value.origin === location.origin ? value.pathname + value.search : '/';
+    if (value.origin !== location.origin) return venueUrl('/');
+    if (value.pathname === '/' && !value.searchParams.has('venue')) return venueUrl('/');
+    return value.pathname + value.search;
   } catch {
-    return '/';
+    return venueUrl('/');
   }
 }
 function phoneLabel(value: string) {

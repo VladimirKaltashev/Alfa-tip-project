@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
+import { venueUrl } from './tenant';
 
 type HelpRole = 'guest' | 'manager' | 'waiter';
 type HelpEntry = { title: string; text: string; href?: string; link?: string };
@@ -140,7 +141,7 @@ export function Help({
   const content = (
     <>
       {!embedded && (
-        <a className="back" href={role === 'waiter' ? '/waiter' : '/'}>
+        <a className="back" href={venueUrl(role === 'waiter' ? '/waiter' : '/')}>
           <ArrowLeft size={18} /> {role === 'waiter' ? 'В кабинет сотрудника' : 'К чаевым'}
         </a>
       )}
@@ -152,7 +153,7 @@ export function Help({
             <summary>{entry.title}</summary>
             <p>{entry.text}</p>
             {entry.href && (
-              <a className="text-button" href={entry.href}>
+              <a className="text-button" href={venueUrl(entry.href)}>
                 {entry.link}
               </a>
             )}

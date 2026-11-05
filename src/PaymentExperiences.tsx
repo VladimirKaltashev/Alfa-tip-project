@@ -52,7 +52,7 @@ type RecipientChoice = {
 };
 
 const navigate = (path: string) => {
-  window.location.href = path;
+  window.location.href = venueUrl(path);
 };
 
 function startVisit(store: Store, scenario: Scenario) {
@@ -96,7 +96,7 @@ function PhoneFrame({ surface, children }: { surface: Surface; children: ReactNo
               </span>
             </div>
             <div className="xp-bank-header">
-              <a href="/experience" aria-label="К сценариям">
+              <a href={venueUrl('/experience')} aria-label="К сценариям">
                 <ArrowLeft size={22} />
               </a>
               <div>
@@ -111,7 +111,7 @@ function PhoneFrame({ surface, children }: { surface: Surface; children: ReactNo
         ) : surface === 'gateway' ? (
           <>
             <div className="xp-gateway-header">
-              <a href="/experience" aria-label="К сценариям">
+              <a href={venueUrl('/experience')} aria-label="К сценариям">
                 <ArrowLeft size={21} />
               </a>
               <div>
@@ -124,7 +124,7 @@ function PhoneFrame({ surface, children }: { surface: Surface; children: ReactNo
         ) : (
           <>
             <div className="xp-web-header">
-              <a href="/experience" aria-label="К сценариям">
+              <a href={venueUrl('/experience')} aria-label="К сценариям">
                 <ArrowLeft size={21} />
               </a>
               <div>
@@ -203,7 +203,7 @@ function DemoIndex({ store }: { store: Store }) {
             </button>
           ))}
         </div>
-        <a className="xp-demo-existing" href="/">
+        <a className="xp-demo-existing" href={venueUrl('/')}>
           Открыть текущую страницу чаевых <ArrowRight size={17} />
         </a>
       </div>
@@ -386,7 +386,7 @@ function TerminalPayment({
   return (
     <main className={`xp-terminal-page ${paid ? 'xp-terminal-paid' : ''}`}>
       <div className="xp-terminal-inner">
-        <a className="xp-terminal-back" href="/experience">
+        <a className="xp-terminal-back" href={venueUrl('/experience')}>
           <ArrowLeft size={18} /> Сценарии
         </a>
         <div className="xp-terminal-columns">
@@ -547,7 +547,7 @@ function TipForm({
     }
     if (isAlfaPay(d.method) && !readAlfaIdentity()) {
       saveDraft(d);
-      navigate(`/alfa-id?return=${encodeURIComponent(location.pathname)}`);
+      navigate(`/alfa-id?return=${encodeURIComponent(venueUrl(location.pathname))}`);
       return;
     }
     setBusy(true);
@@ -676,7 +676,7 @@ function TipSuccess({ store, surface, tip }: { store: Store; surface: Surface; t
               .join(', ')}
           </span>
         </div>
-        <a className="xp-button" href="/experience">
+        <a className="xp-button" href={venueUrl('/experience')}>
           К сценариям <ArrowRight size={20} />
         </a>
       </div>

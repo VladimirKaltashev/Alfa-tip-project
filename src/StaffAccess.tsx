@@ -115,7 +115,7 @@ export function StaffAccess({ children }: { children: ReactNode }) {
     return (
       <>
         <div className="staff-session">
-          {import.meta.env.DEV && <a href="/demo?venue=demo">Выбор роли в демо</a>}
+          <a href="/">К выбору раздела</a>
           <span>
             <ShieldCheck size={17} />
             {identity.username} · {identity.role === 'manager' ? 'Менеджер' : 'Сотрудник'} ·{' '}
@@ -153,15 +153,13 @@ export function StaffAccess({ children }: { children: ReactNode }) {
       </a>
       <span className="eyebrow">АЛЬФА ЧАЕВЫЕ · ПЕРСОНАЛ</span>
       <h1>Вход в кабинет заведения</h1>
-      {import.meta.env.DEV && (
-        <div className="staff-demo-entry">
-          <b>Хотите посмотреть демонстрацию?</b>
-          <span>Выберите роль — тестовый кабинет откроется без ручного ввода пароля.</span>
-          <a className="primary" href="/demo?venue=demo">
-            Открыть демонстрацию
-          </a>
-        </div>
-      )}
+      <div className="staff-demo-entry">
+        <b>Выберите другой путь</b>
+        <span>Гостевая страница открывается без входа. Для кабинетов нужны учётные записи.</span>
+        <a className="primary" href="/">
+          К началу
+        </a>
+      </div>
       <p>
         Заведение: <b>{venueId}</b>. Войдите с учётной записью, выданной администратором или
         менеджером.
