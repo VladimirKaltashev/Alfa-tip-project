@@ -241,3 +241,59 @@ class AccessTests(HttpFixture):
         self.assertEqual(self.raw('GET', '/api/store', cookies=employee_cookie)[0], 401)
 
 
+
+    def test_employee_with_balance_cannot_be_deleted_but_can_pause_and_withdraw(self):
+        self.pay()
+        state = self.call('GET', '/api/store')[1]
+        deleted = copy.deepcopy(state)
+        deleted['employees'] = [e for e in deleted['employees'] if e['id'] != 'alex']
+        deleted['settings'] = {'recipientIds': ['maria'], 'shares': [100]}
+        status, error = self.call('PUT', '/api/store', deleted)
+        self.assertEqual(status, 400)
+        self.assertIn('остатком', error['error'])
+        self.assertEqual(self.call('GET', '/api/store')[1], state)
+        # Omitting historical tips must not bypass the authoritative balance check.
+        deleted['tips'] = []
+        self.assertEqual(self.call('PUT', '/api/store', deleted)[0], 400)
+        state['employees'][0]['active'] = False
+        self.assertEqual(self.call('PUT', '/api/store', state)[0], 200)
+        self.cookies['alfa_staff'] = 'employee-test-session'
+        own = self.call('GET', '/api/store')[1]
+        own['withdrawals'] = [{'id': 'settle', 'amount': 10000, 'date': server.now(), 'employeeId': 'alex'}]
+        self.assertEqual(self.call('PUT', '/api/store', own)[0], 200)
+        self.cookies['alfa_staff'] = 'manager-test-session'
+        settled = self.call('GET', '/api/store')[1]
+        settled['employees'] = [e for e in settled['employees'] if e['id'] != 'alex']
+        settled['settings'] = {'recipientIds': ['maria'], 'shares': [100]}
+        self.assertEqual(self.call('PUT', '/api/store', settled)[0], 200)
+        saved = self.call('GET', '/api/store')[1]
+        self.assertEqual(saved['tips'][0]['allocations']['alex'], 10000)
+        self.assertEqual(saved['withdrawals'][0]['amount'], 10000)
+
+    def test_payment_racing_employee_deletion_preserves_profile_and_balance(self):
+        state = self.call('GET', '/api/store')[1]
+        state['employees'] = [e for e in state['employees'] if e['id'] != 'alex']
+        self.pay()
+        self.assertEqual(self.call('PUT', '/api/store', state)[0], 409)
+        saved = self.call('GET', '/api/store')[1]
+        self.assertIn('alex', {e['id'] for e in saved['employees']})
+        self.assertEqual(saved['tips'][0]['allocations']['alex'], 10000)
+
+    def test_public_goal_supports_legacy_profile_without_exposing_private_fields(self):
+        with server.connect() as conn:
+            state = server.read_state(conn)
+            state['profile'] = {'goal': 'Legacy goal', 'target': 5000000, 'notifications': True}
+            state['employees'][0]['cardLast4'] = '1234'
+            server.write_state(conn, state)
+        for route in ('/api/guest/store', '/api/venue'):
+            view = self.call('GET', route)[1]
+            alex = next(e for e in view['employees'] if e['id'] == 'alex')
+            self.assertEqual(alex['goal'], 'Legacy goal')
+            self.assertNotIn('cardLast4', alex)
+        with server.connect() as conn:
+            state = server.read_state(conn)
+            state['employees'][0]['goal'] = 'Employee goal'
+            server.write_state(conn, state)
+        view = self.call('GET', '/api/guest/store')[1]
+        self.assertEqual(view['employees'][0]['goal'], 'Employee goal')
+        self.assertEqual(view['profile']['goal'], '')

@@ -106,6 +106,10 @@ export function upgradeStore(s: Store): Store {
       cardLast4: '',
     };
     if (
+      e.role !== undefined &&
+      e.initials !== undefined &&
+      e.color !== undefined &&
+      e.bio !== undefined &&
       e.goalTarget !== undefined &&
       e.cardLast4 !== undefined &&
       e.notifications !== undefined &&
@@ -115,8 +119,12 @@ export function upgradeStore(s: Store): Store {
     changed = true;
     return {
       ...e,
+      role: e.role ?? 'Сотрудник',
+      initials: e.initials ?? e.name.slice(0, 1).toUpperCase(),
+      color: e.color ?? '#e8e8e8',
+      bio: e.bio ?? '',
       photo: e.photo || fallback.photo || undefined,
-      goal: e.goal ?? fallback.goal,
+      goal: e.goal ?? (e.id === 'alex' && s.profile.goal ? s.profile.goal : fallback.goal),
       goalTarget: e.goalTarget ?? fallback.goalTarget,
       cardLast4: e.cardLast4 ?? fallback.cardLast4,
       notifications: e.notifications ?? true,
@@ -148,7 +156,7 @@ export function upgradeStore(s: Store): Store {
     : s;
 }
 export function employeeGoal(s: Store, e: Employee): string {
-  return e.id === 'alex' ? s.profile.goal : e.goal || 'Цель пока не указана';
+  return e.goal || (e.id === 'alex' && s.profile.goal) || 'Цель пока не указана';
 }
 
 export const coreIds = ['alex', 'maria', 'max'];
@@ -261,7 +269,11 @@ export function prepareDraft(d: Draft, s: Store): Draft {
   };
 }
 export function venueRule(s: Store): { ids: string[]; shares: number[] } {
-  const ids = activeIds(s),
+  const active = activeIds(s),
+    // An explicit subset is a saved choice, not a change to the venue's team.
+    ids = s.settings.recipientIds?.length
+      ? active.filter((id) => s.settings.recipientIds!.includes(id))
+      : active,
     savedIds = s.settings.recipientIds || coreIds;
   const same = ids.length === savedIds.length && ids.every((id) => savedIds.includes(id));
   return {
@@ -392,8 +404,9 @@ export function decodeTipContext(value: string | null): Draft | null {
     const recipients = (
       Array.isArray(data.draft?.recipientIds) ? data.draft.recipientIds : []
     ).filter((id: unknown) => typeof id === 'string' && served.includes(id));
-    const amount = sanitizeTipAmount(String(data.draft?.amount || ''));
-    if (!served.length || !recipients.length || !amount) return null;
+    const amount = typeof data.draft?.amount === 'string' ? data.draft.amount.trim() : '';
+    const kopecks = parseAmount(amount);
+    if (!served.length || !recipients.length || kopecks < MIN_TIP || kopecks > MAX_TIP) return null;
     const venue: Venue = {
       name: data.venue.name,
       address: data.venue.address,

@@ -269,6 +269,18 @@ test('store upgrade adds portraits, goals and map without losing saved data', ()
   updated.employees[1].goal = 'Собственная цель';
   assert.equal(upgradeStore(updated), updated);
 });
+test('store upgrade fills optional legacy employee fields used by manager pages', () => {
+  const old = seed();
+  old.employees = [
+    { id: 'alex', name: 'Александр', active: true } as (typeof old.employees)[number],
+  ];
+  const updated = upgradeStore(old);
+  assert.equal(updated.employees[0].role, 'Сотрудник');
+  assert.equal(updated.employees[0].initials, 'А');
+  assert.equal(updated.employees[0].bio, '');
+  assert.ok(updated.employees[0].color);
+  assert.equal(upgradeStore(updated), updated);
+});
 test('map link respects configured web URL and rejects non-web schemes', () => {
   const address = 'Москва, Покровка, 18/18';
   assert.equal(
@@ -409,4 +421,46 @@ test('ordinary saved drafts use the live manager team', () => {
     };
   assert.equal(storeForDraft(live, snapshot), live);
   assert.equal(storeForDraft(live, { ...snapshot, snapshotLocked: true }).employees.length, 2);
+});
+
+test('saved distribution subsets exclude other active employees, even after reordering', () => {
+  const s = seed();
+  s.settings = { recipientIds: ['alex', 'maria'], shares: [80, 20] };
+  s.employees.reverse();
+  assert.deepEqual(venueRule(s), { ids: ['maria', 'alex'], shares: [20, 80] });
+  const pending = s.tips.find((tip) => !Object.keys(tip.allocations).length)!;
+  const distributed = distributePool(s).tips.find((tip) => tip.id === pending.id)!;
+  assert.deepEqual(distributed.allocations, allocate(pending.amount, ['maria', 'alex'], [20, 80]));
+  assert.equal(distributed.allocations.max, undefined);
+  s.settings = { recipientIds: ['alex'], shares: [100] };
+  assert.deepEqual(venueRule(s), { ids: ['alex'], shares: [100] });
+});
+
+test('pausing all selected recipients cannot redirect their pool to excluded employees', () => {
+  const s = seed();
+  s.settings = { recipientIds: ['alex'], shares: [100] };
+  s.employees[0].active = false;
+  assert.deepEqual(venueRule(s), { ids: [], shares: [] });
+  assert.throws(() => distributePool(s));
+});
+
+test('postponed links preserve every kopeck and reject malformed or out-of-range amounts', () => {
+  const s = seed();
+  const d = prepareDraft(freshDraft(), s);
+  for (const amount of ['175.05', '175,05', '10.01', '50000.00']) {
+    const restored = decodeTipContext(encodeTipContext(s, { ...d, amount }));
+    assert.ok(restored);
+    assert.equal(parseAmount(restored.amount), parseAmount(amount));
+  }
+  for (const amount of ['9.99', '50000.01', '175.005', '1e3', '175oops05', '-175.05'])
+    assert.equal(decodeTipContext(encodeTipContext(s, { ...d, amount })), null);
+});
+
+test('guest employee goals use public fields when the private profile is redacted', () => {
+  const s = seed();
+  s.profile.goal = '';
+  s.employees[0].goal = 'Курс фотографии';
+  assert.equal(employeeGoal(s, s.employees[0]), 'Курс фотографии');
+  s.employees[0].goal = '';
+  assert.equal(employeeGoal(s, s.employees[0]), 'Цель пока не указана');
 });

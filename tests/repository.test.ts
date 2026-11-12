@@ -147,3 +147,61 @@ test('payment request cannot send a client supplied ledger', async () => {
   assert.ok(body.draft);
   assert.equal(body.store, undefined);
 });
+
+test('damaged cache does not block API recovery and remains exportable until recovery', async () => {
+  const repo = await repository();
+  localStorage.setItem(KEY + ':demo:guest', '{broken');
+  assert.doesNotThrow(() => repo.loadStore());
+  assert.equal(repo.exportLocalCache(), '{broken');
+  const restored = { ...seed(), _revision: 7 };
+  globalThis.fetch = async () => json(restored);
+  await repo.hydrateStore();
+  assert.deepEqual(repo.loadStore(), restored);
+});
+
+test('reset clears the current tenant cache and draft without clearing other contexts', async () => {
+  const repo = await repository();
+  repo.saveDraft({ ...freshDraft(), amount: '175.05' });
+  localStorage.setItem(KEY + ':other:guest', 'other venue');
+  sessionStorage.setItem(KEY + ':demo:employee', 'staff cache');
+  assert.equal(JSON.parse(repo.exportLocalCache())._revision, 4);
+  repo.resetLocalCache();
+  assert.equal(localStorage.getItem(KEY + ':demo:guest'), null);
+  assert.equal(localStorage.getItem(repo.DRAFT_KEY), null);
+  assert.equal(localStorage.getItem(KEY + ':other:guest'), 'other venue');
+  assert.equal(sessionStorage.getItem(KEY + ':demo:employee'), 'staff cache');
+});
+
+test('a late background read cannot replace a newer acknowledged save', async () => {
+  const repo = await repository();
+  const before = repo.loadStore();
+  let resolve!: (response: Response) => void;
+  globalThis.fetch = async (_target, options) =>
+    options?.method === 'PUT'
+      ? json({ ...before, venue: { ...before.venue, name: 'Saved' }, _revision: 5 })
+      : new Promise<Response>((done) => {
+          resolve = done;
+        });
+  const reading = repo.hydrateStore();
+  await repo.saveStore(before);
+  resolve(json(before));
+  assert.equal((await reading)?._revision, 5);
+  assert.equal(repo.loadStore().venue.name, 'Saved');
+  assert.equal(repo.loadStore()._revision, 5);
+});
+
+test('cancelled hydration cannot update the cache after unmount or during a write', async () => {
+  const repo = await repository();
+  const before = repo.loadStore();
+  globalThis.fetch = async () => json({ ...before, _revision: 5 });
+  assert.equal(await repo.hydrateStore(() => false), null);
+  assert.deepEqual(repo.loadStore(), before);
+});
+
+test('initial hydration accepts the server after restoration to an older revision', async () => {
+  const repo = await repository();
+  const restored = { ...repo.loadStore(), _revision: 2 };
+  globalThis.fetch = async () => json(restored);
+  assert.equal((await repo.hydrateStore())?._revision, 2);
+  assert.equal(repo.loadStore()._revision, 2);
+});

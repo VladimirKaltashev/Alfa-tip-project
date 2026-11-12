@@ -78,7 +78,8 @@ import {
   loadDraft,
   saveDraft,
   confirmPayment,
-  hydrateStore,
+  exportLocalCache,
+  resetLocalCache,
 } from './repository';
 import { PaymentExperiences } from './PaymentExperiences';
 import { AlfaIdPage, clearAlfaIdentity, readAlfaIdentity } from './AlfaId';
@@ -87,7 +88,8 @@ import { Cabinet } from './Cabinet';
 import { Help } from './Help';
 import { ManagementAccess } from './ManagementAccess';
 import { AuditLog } from './AuditLog';
-import { venueId, venueUrl } from './tenant';
+import { venueId, venueUrl, staffPage } from './tenant';
+import { startStoreSync, unseenEmployeeTips } from './store-sync';
 import { SaveStatus } from './SaveStatus';
 import { DistributionSettings } from './DistributionSettings';
 import './save-status.css';
@@ -113,51 +115,42 @@ function App() {
   const identity = readAlfaIdentity();
   const resumed =
     path === '/' ? decodeTipContext(new URLSearchParams(location.search).get('resume')) : null;
+  const saving = useRef(false);
+  const syncFailed = useRef(false);
+  function acceptStore(next: Store, initial = false) {
+    const incoming =
+      !initial && path.startsWith('/waiter') ? unseenEmployeeTips(next, seenTips.current) : 0;
+    seenTips.current = new Set(next.tips.map((tip) => tip.id));
+    setStore(next);
+    if (incoming) setToast('Новые чаевые: +' + money(incoming));
+  }
+  useEffect(
+    () =>
+      startStoreSync({
+        poll: staffPage,
+        canRefresh: () => !saving.current,
+        onStore: (remote, initial) => {
+          acceptStore(remote, initial);
+          syncFailed.current = false;
+          setLoadError('');
+          setReady(true);
+        },
+        onError: (error, initial) => {
+          if (initial) {
+            setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить данные');
+            setReady(true);
+          } else if (!syncFailed.current) {
+            setToast('Не удалось обновить данные. Повторим при восстановлении связи.');
+            syncFailed.current = true;
+          }
+        },
+      }),
+    [],
+  );
   useEffect(() => {
-    let active = true;
-    hydrateStore()
-      .then((remote) => {
-        if (remote && active) {
-          seenTips.current = new Set(remote.tips.map((t) => t.id));
-          setStore(remote);
-        }
-      })
-      .catch((error) => {
-        if (active)
-          setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить данные');
-      })
-      .finally(() => {
-        if (active) setReady(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    const update = () => {
-      try {
-        const next = loadStore();
-        const incoming = next.tips.find(
-          (t) => !seenTips.current.has(t.id) && (t.allocations.alex || 0) > 0,
-        );
-        seenTips.current = new Set(next.tips.map((t) => t.id));
-        setStore(next);
-        if (
-          incoming &&
-          next.profile.notifications &&
-          window.location.pathname.startsWith('/waiter')
-        )
-          setToast('Новые чаевые: +' + money(incoming.allocations.alex));
-      } catch {
-        setToast('Не удалось обновить данные');
-      }
-    };
-    window.addEventListener('storage', update);
+    const update = () => acceptStore(loadStore());
     window.addEventListener('tips-update', update);
-    return () => {
-      window.removeEventListener('storage', update);
-      window.removeEventListener('tips-update', update);
-    };
+    return () => window.removeEventListener('tips-update', update);
   }, []);
   useEffect(() => {
     if (!toast) return;
@@ -198,7 +191,6 @@ function App() {
       setSavingState(false);
     }
   }
-  const saving = useRef(false);
   const [savingState, setSavingState] = useState(false);
   const close = () => setModal(null);
   useEffect(() => {
@@ -2187,6 +2179,7 @@ function Manager({ path, store, update, notify, setModal, close }: DashboardProp
     );
   }
   function askDelete(employee: Employee) {
+    const remaining = balance(store, employee.id);
     setModal(
       <div className="delete-employee-dialog">
         <div className="round-icon danger-icon">
@@ -2194,14 +2187,18 @@ function Manager({ path, store, update, notify, setModal, close }: DashboardProp
         </div>
         <h2>Удалить {employee.name}?</h2>
         <p className="muted">
-          Сотрудник исчезнет из команды и выбора для новых чаевых. Уже полученные чаевые останутся в
-          истории.
+          {remaining !== 0
+            ? `На балансе сотрудника ${money(remaining)}. Сначала нужно вывести чаевые. Приём новых чаевых можно приостановить в команде.`
+            : 'Сотрудник исчезнет из команды и выбора для новых чаевых. Уже полученные чаевые останутся в истории.'}
         </p>
         <button
           className="danger-button"
+          disabled={remaining !== 0}
           onClick={async () => {
             if (
               await update((s) => {
+                if (balance(s, employee.id) !== 0)
+                  throw new Error('Сначала выведите остаток чаевых сотрудника.');
                 const employees = s.employees.filter((e) => e.id !== employee.id),
                   ids = employees.filter((e) => e.active).map((e) => e.id);
                 return {
@@ -2909,11 +2906,7 @@ export class ErrorBoundary extends React.Component<
             className="secondary"
             onClick={() => {
               try {
-                download(
-                  localStorage.getItem('alfa-tips-demo-v1') || '{}',
-                  'alfa-tips-backup.json',
-                  'application/json',
-                );
+                download(exportLocalCache(), 'alfa-tips-backup.json', 'application/json');
               } catch {
                 alert('Хранилище браузера недоступно');
               }
@@ -2925,16 +2918,14 @@ export class ErrorBoundary extends React.Component<
             className="primary"
             onClick={() => {
               try {
-                localStorage.removeItem('alfa-tips-demo-v1');
-                localStorage.removeItem('alfa-tips-draft-v3');
-                sessionStorage.removeItem('tip-draft');
-                location.href = '/';
+                resetLocalCache();
+                location.reload();
               } catch {
                 alert('Разрешите локальное хранилище браузера');
               }
             }}
           >
-            Начать демо заново
+            Загрузить данные заново
           </button>
         </div>
       </main>

@@ -162,9 +162,12 @@ def public_venue(venue):
     return {key: venue[key] for key in ('name', 'address', 'bill', 'mapUrl') if key in venue}
 
 
-def public_employee(employee):
+def public_employee(employee, profile=None):
     fields = ('id', 'name', 'role', 'initials', 'color', 'active', 'bio', 'photo', 'goal', 'goalTarget')
-    return {key: employee[key] for key in fields if key in employee}
+    result = {key: employee[key] for key in fields if key in employee}
+    if employee['id'] == 'alex' and not result.get('goal') and profile:
+        result['goal'] = profile.get('goal', '')
+    return result
 
 
 def view_store(conn, store, tenant, identity=None, guest_digest=None):
@@ -189,7 +192,7 @@ def view_store(conn, store, tenant, identity=None, guest_digest=None):
     else:
         ids = {row[0] for row in conn.execute('SELECT payment_id FROM payment_owners WHERE tenant=? AND guest_digest=?', (tenant, guest_digest))}
         result['tips'] = [tip for tip in store['tips'] if tip['id'] in ids]
-        result['employees'] = [public_employee(item) for item in store['employees'] if item['active']]
+        result['employees'] = [public_employee(item, store['profile']) for item in store['employees'] if item['active']]
         events = [event for event in store['oranges']['events'] if event['tipId'] in ids]
         result['oranges'] = {'events': events, 'balance': sum(event['amount'] for event in events)}
     return result

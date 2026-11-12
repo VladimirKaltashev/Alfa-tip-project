@@ -149,6 +149,10 @@ def validate_changes(current: dict, incoming: dict) -> None:
     for item in current["withdrawals"]:
         person = item.get("employeeId", "alex")
         available[person] = available.get(person, 0) - item["amount"]
+    remaining = {employee['id'] for employee in incoming['employees']}
+    for employee in current['employees']:
+        if employee['id'] not in remaining and available.get(employee['id'], 0) != 0:
+            raise ValueError('Нельзя удалить сотрудника с остатком на балансе. Сначала выведите чаевые; приём новых можно приостановить.')
     for item in incoming["withdrawals"]:
         original = withdrawals.get(item["id"])
         if original is not None:

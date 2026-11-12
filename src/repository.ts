@@ -39,6 +39,13 @@ function cacheKey() {
 function writeLocal(s: Store) {
   cache().setItem(cacheKey(), JSON.stringify(s));
 }
+export function exportLocalCache(): string {
+  return cache().getItem(cacheKey()) || '{}';
+}
+export function resetLocalCache() {
+  cache().removeItem(cacheKey());
+  clearDraft();
+}
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -69,25 +76,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function loadStore(): Store {
-  const raw = cache().getItem(cacheKey());
-  if (!raw) {
-    const s = seed();
-    writeLocal(s);
-    return s;
+  try {
+    const raw = cache().getItem(cacheKey());
+    if (!raw) return seed();
+    const s = JSON.parse(raw);
+    if (!isStore(s) || !s.venue || !s.profile || !s.settings) return seed();
+    return upgradeStore(s);
+  } catch {
+    // The loading screen waits for the API. A damaged cache must not prevent
+    // hydration; keep its raw contents available for export until then.
+    return seed();
   }
-  const s = JSON.parse(raw);
-  if (!isStore(s) || !s.venue || !s.profile || !s.settings)
-    throw new Error('Не удалось прочитать сохранённые данные');
-  const updated = upgradeStore(s);
-  if (updated !== s) writeLocal(updated);
-  return updated;
 }
 /** Загружает только доступную текущей роли проекцию данных заведения. */
-export async function hydrateStore(): Promise<Store | null> {
+export async function hydrateStore(canApply: () => boolean = () => true): Promise<Store | null> {
+  const context = cacheKey();
+  const initialRevision = loadStore()._revision;
   const remote = await request<unknown>(staffPage ? '/store' : '/guest/store');
   if (!isStore(remote)) {
     throw new Error('Сервер вернул некорректные данные');
   }
+  if (!canApply() || context !== cacheKey()) return null;
+  // A GET started before a successful save may finish after it.
+  const current = loadStore();
+  if (current._revision !== initialRevision && (current._revision ?? 0) > (remote._revision ?? 0))
+    return current;
   const upgraded = upgradeStore(remote);
   writeLocal(upgraded);
   return upgraded;
