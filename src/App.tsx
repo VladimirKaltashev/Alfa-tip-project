@@ -94,7 +94,7 @@ import { SaveStatus } from './SaveStatus';
 import { DistributionSettings } from './DistributionSettings';
 import './save-status.css';
 const go = (path: string) => {
-  window.location.href = path;
+  window.location.href = venueUrl(path);
 };
 const date = (s: string) =>
   new Date(s).toLocaleString('ru-RU', {
@@ -279,7 +279,7 @@ function App() {
         <div className="topbar-inner">
           <a
             className="brand"
-            href={manager ? '/manager' : waiter ? '/waiter' : '/'}
+            href={venueUrl(manager ? '/manager' : waiter ? '/waiter' : '/')}
             aria-label="Альфа Чаевые — главная"
           >
             <span className="brand-wordmark">
@@ -295,30 +295,21 @@ function App() {
               {manager ? 'Кабинет заведения' : 'Кабинет сотрудника'}
             </span>
           )}
-          {!waiter &&
-            !manager &&
-            (identity ? (
-              <span className="alfa-session">
-                <Gift size={15} />
-                <a href="/rewards">{store.oranges.balance} бонусов</a>
-                <button
-                  onClick={() => {
-                    clearAlfaIdentity();
-                    location.href = '/';
-                  }}
-                  aria-label="Выйти из Alfa ID"
-                >
-                  {identity.name} · выйти
-                </button>
-              </span>
-            ) : (
-              <a
-                className="alfa-login"
-                href={`/alfa-id?return=${encodeURIComponent(path + location.search)}`}
+          {!waiter && !manager && identity && (
+            <span className="alfa-session">
+              <Gift size={15} />
+              <a href={venueUrl('/rewards')}>{store.oranges.balance} бонусов</a>
+              <button
+                onClick={() => {
+                  clearAlfaIdentity();
+                  location.href = venueUrl('/');
+                }}
+                aria-label="Выйти из Alfa ID"
               >
-                <LogIn size={16} /> Войти с Alfa ID
-              </a>
-            ))}
+                {identity.name} · выйти
+              </button>
+            </span>
+          )}
         </div>
         {!waiter && !manager && (
           <div className="guest-venue-strip">
@@ -395,7 +386,7 @@ function App() {
               <div className="quiet">
                 <ShieldCheck size={18} /> Простое спасибо. Каждый день.
               </div>
-              <a href="/">
+              <a href={venueUrl('/')}>
                 Открыть страницу гостя <ExternalLink size={15} />
               </a>
             </div>
@@ -441,10 +432,10 @@ function App() {
           title="Не получилось оплатить"
           text="Деньги не списаны, чаевые не отправлены. Попробуйте ещё раз или выберите другой способ."
         >
-          <a className="primary" href="/payment">
+          <a className="primary" href={venueUrl('/payment')}>
             Попробовать снова <ArrowRight size={18} />
           </a>
-          <a className="secondary" href="/">
+          <a className="secondary" href={venueUrl('/')}>
             Изменить чаевые
           </a>
         </Outcome>
@@ -456,13 +447,13 @@ function App() {
           title="Рады были видеть вас!"
           text="Чаевые — всегда по желанию. Надеемся, вам было хорошо в «Листве»."
         >
-          <a className="primary" href="/">
+          <a className="primary" href={venueUrl('/')}>
             Вернуться к странице <ArrowRight size={18} />
           </a>
         </Outcome>
       ) : path === '/history' ? (
         <main className="narrow">
-          <a className="back" href="/">
+          <a className="back" href={venueUrl('/')}>
             <ArrowLeft size={18} /> К чаевым
           </a>
           <h1>Ваши благодарности</h1>
@@ -475,14 +466,14 @@ function App() {
           title="Страница не найдена"
           text="Проверьте ссылку или вернитесь к чаевым."
         >
-          <a className="primary" href="/">
+          <a className="primary" href={venueUrl('/')}>
             На главную
           </a>
         </Outcome>
       )}
       <footer className="site-footer">
         <span>Альфа Чаевые · сделано для благодарности</span>
-        <a href={waiter ? '/help?from=waiter' : '/help'}>Помощь</a>
+        <a href={venueUrl(waiter ? '/help?from=waiter' : '/help')}>Помощь</a>
         <span>Демонстрация · реальные деньги не списываются</span>
       </footer>
       {!modal && (
@@ -1082,7 +1073,7 @@ function Guest({
               </span>
               <ChevronRight size={18} />
             </button>
-            <a className="skip-tip" href="/thanks">
+            <a className="skip-tip" href={venueUrl('/thanks')}>
               Без чаевых
             </a>
           </div>
@@ -1144,7 +1135,7 @@ function Payment({ store }: { store: Store }) {
         : 'Alfa Pay подтверждается после входа через Alfa ID. За чаевые в этом способе начисляется двойное количество бонусов.';
   return (
     <main className="narrow">
-      <a className="back" href="/">
+      <a className="back" href={venueUrl('/')}>
         <ArrowLeft size={18} /> Изменить чаевые
       </a>
       <div className="checkout card">
@@ -1195,7 +1186,10 @@ function Payment({ store }: { store: Store }) {
           <span>{paymentDescription}</span>
         </div>
         {alfaPay && !identity && (
-          <a className="alfa-pay-gate" href={`/alfa-id?return=${encodeURIComponent('/payment')}`}>
+          <a
+            className="alfa-pay-gate"
+            href={`/alfa-id?return=${encodeURIComponent(venueUrl('/payment'))}`}
+          >
             <LogIn size={19} />
             <span>
               <b>Войдите с Alfa ID</b>
@@ -1304,7 +1298,7 @@ function Later({ store, notify }: { store: Store; notify: (s: string) => void })
           <a className="secondary" href={link}>
             Открыть сохранённую страницу <ArrowRight size={18} />
           </a>
-          <a className="text-button" href="/">
+          <a className="text-button" href={venueUrl('/')}>
             Вернуться к чаевым
           </a>
         </div>
@@ -1321,7 +1315,7 @@ function Success({ store, id, notify }: { store: Store; id: string; notify: (s: 
         title="Операция не найдена"
         text="Этот перевод не сохранён в текущем браузере."
       >
-        <a className="primary" href="/history">
+        <a className="primary" href={venueUrl('/history')}>
           Открыть историю
         </a>
       </Outcome>
@@ -1408,10 +1402,10 @@ function Success({ store, id, notify }: { store: Store; id: string; notify: (s: 
           >
             <Download size={18} /> Сохранить подтверждение
           </button>
-          <a className="primary" href="/history">
+          <a className="primary" href={venueUrl('/history')}>
             Мои благодарности <ArrowRight size={18} />
           </a>
-          <a className="text-button" href="/">
+          <a className="text-button" href={venueUrl('/')}>
             Вернуться в заведение
           </a>
         </div>
@@ -2944,7 +2938,7 @@ function Rewards({ store }: { store: Store }) {
     );
   return (
     <main className="rewards-page">
-      <a className="back" href="/">
+      <a className="back" href={venueUrl('/')}>
         <ArrowLeft size={18} /> К чаевым
       </a>
       <section className="rewards-hero">

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Store } from './model';
 import { inPeriod, money } from './model';
+import { venueUrl } from './tenant';
 import './cabinet.css';
 
 const sections = [
@@ -160,7 +161,7 @@ export function Cabinet({
         <button className="bank-dark" onClick={qr}>
           <QrCode size={19} /> QR-код заведения
         </button>
-        <a className="bank-guest-link" href="/">
+        <a className="bank-guest-link" href={venueUrl('/')}>
           Открыть страницу гостя <ArrowRight size={16} />
         </a>
       </aside>
